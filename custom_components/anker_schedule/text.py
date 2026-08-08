@@ -51,7 +51,7 @@ class AnkerScheduleText(TextEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=title,
-            manufacturer="Anker",
+            manufacturer="energienerds.nl",
             model="Schedule Planner",
         )
 
