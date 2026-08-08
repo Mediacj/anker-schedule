@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anker Schedule",
+        "description": "Koppel de Anker bedrijfsmodus-, richting-, vermogen- en NOM-switch entities. De integratie past het 24u-schema elk uur toe.",
+        "data": {
+          "name": "Naam",
+          "mode_entity": "Bedrijfsmodus select",
+          "direction_entity": "Laad/ontlaadregeling select",
+          "power_entity": "Vermogen number",
+          "nom_switch_entity": "NOM-O switch",
+          "nom_option": "NOM-optie (self_consumption)",
+          "third_party_option": "Externe modus-optie (third_party_control)",
+          "charge_option": "Charge-optie",
+          "discharge_option": "Discharge-optie",
+          "default_power": "Standaard vermogen (W)",
+          "max_power": "Max vermogen (W)",
+          "min_power": "Min vermogen (W)",
+          "power_step": "Vermogensstap (W)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Deze bedrijfsmodus-entity is al geconfigureerd."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anker Schedule - instellingen",
+        "description": "Pas gekoppelde entities en vermogenslimieten aan.",
+        "data": {
+          "name": "Naam",
+          "mode_entity": "Bedrijfsmodus select",
+          "direction_entity": "Laad/ontlaadregeling select",
+          "power_entity": "Vermogen number",
+          "nom_switch_entity": "NOM-O switch",
+          "nom_option": "NOM-optie (self_consumption)",
+          "third_party_option": "Externe modus-optie (third_party_control)",
+          "charge_option": "Charge-optie",
+          "discharge_option": "Discharge-optie",
+          "default_power": "Standaard vermogen (W)",
+          "max_power": "Max vermogen (W)",
+          "min_power": "Min vermogen (W)",
+          "power_step": "Vermogensstap (W)"
+        }
+      }
+    }
+  }
+}
