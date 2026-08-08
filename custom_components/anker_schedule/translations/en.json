@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anker Schedule",
+        "description": "Link the Anker mode, direction, power and NOM-switch entities. The integration applies the 24h schedule every hour.",
+        "data": {
+          "name": "Name",
+          "mode_entity": "Operating mode select",
+          "direction_entity": "Charge/discharge control select",
+          "power_entity": "Power number",
+          "nom_switch_entity": "NOM-O switch",
+          "nom_option": "NOM option (self_consumption)",
+          "third_party_option": "External mode option (third_party_control)",
+          "charge_option": "Charge option",
+          "discharge_option": "Discharge option",
+          "default_power": "Default power (W)",
+          "max_power": "Max power (W)",
+          "min_power": "Min power (W)",
+          "power_step": "Power step (W)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This mode entity is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anker Schedule - options",
+        "description": "Update linked entities and power limits.",
+        "data": {
+          "name": "Name",
+          "mode_entity": "Operating mode select",
+          "direction_entity": "Charge/discharge control select",
+          "power_entity": "Power number",
+          "nom_switch_entity": "NOM-O switch",
+          "nom_option": "NOM option (self_consumption)",
+          "third_party_option": "External mode option (third_party_control)",
+          "charge_option": "Charge option",
+          "discharge_option": "Discharge option",
+          "default_power": "Default power (W)",
+          "max_power": "Max power (W)",
+          "min_power": "Min power (W)",
+          "power_step": "Power step (W)"
+        }
+      }
+    }
+  }
+}
