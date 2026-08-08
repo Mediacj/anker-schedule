@@ -497,7 +497,6 @@ class AnkerScheduleCard extends HTMLElement {
             <button type="button" data-action="all-off">Alles uit</button>
             <button type="button" class="apply-now-btn" data-action="apply-now">Nu toepassen</button>
           </div>
-          <div class="apply-feedback" aria-live="polite"></div>
 
           <div class="hint">
             NOM = eigen verbruik. NOM-O = alleen <code>switch.anker_nom</code> aan
@@ -531,7 +530,6 @@ class AnkerScheduleCard extends HTMLElement {
       powerSlider: card.querySelector(".power-slider"),
       powerValue: card.querySelector(".power-value"),
       applyBtn: card.querySelector(".apply-now-btn"),
-      applyFeedback: card.querySelector(".apply-feedback"),
     };
 
     this._els.toggleBtn.addEventListener("click", () => {
@@ -855,32 +853,25 @@ class AnkerScheduleCard extends HTMLElement {
       btn.disabled = true;
       btn.classList.remove("is-ok", "is-error");
       btn.classList.add("is-busy");
-      btn.textContent = "Bezig…";
+      btn.textContent = "…";
     }
-    this._showApplyFeedback("Bezig met toepassen…", "busy");
 
     try {
       this._persist();
       this._flushStorageWrite();
       const result = await this._maybeApplySchedule(true, true);
-      const message = result?.message || "Klaar";
       const ok = result?.ok !== false;
-      this._showApplyFeedback(message, ok ? "ok" : "error");
-      this._hassNotify(message);
       if (btn) {
         btn.classList.remove("is-busy");
         btn.classList.add(ok ? "is-ok" : "is-error");
-        btn.textContent = ok ? "Toegepast ✓" : "Mislukt";
+        btn.textContent = ok ? "✓" : "!";
       }
     } catch (err) {
       console.error("Anker Schedule Card: apply-now failed", err);
-      const message = "Toepassen mislukt";
-      this._showApplyFeedback(message, "error");
-      this._hassNotify(message);
       if (btn) {
         btn.classList.remove("is-busy");
         btn.classList.add("is-error");
-        btn.textContent = "Mislukt";
+        btn.textContent = "!";
       }
     } finally {
       window.setTimeout(() => {
@@ -890,32 +881,7 @@ class AnkerScheduleCard extends HTMLElement {
           btn.textContent = "Nu toepassen";
         }
         this._applyBusy = false;
-      }, 2200);
-    }
-  }
-
-  _showApplyFeedback(message, state = "") {
-    const el = this._els?.applyFeedback;
-    if (!el) return;
-    el.textContent = message || "";
-    el.classList.remove("is-ok", "is-error", "is-busy", "is-visible");
-    if (!message) return;
-    if (state) el.classList.add(`is-${state}`);
-    el.classList.add("is-visible");
-  }
-
-  _hassNotify(message) {
-    if (!message) return;
-    try {
-      this.dispatchEvent(
-        new CustomEvent("hass-notification", {
-          detail: { message },
-          bubbles: true,
-          composed: true,
-        })
-      );
-    } catch (_e) {
-      /* ignore */
+      }, 1200);
     }
   }
 
@@ -1227,24 +1193,6 @@ class AnkerScheduleCard extends HTMLElement {
         border-color: rgba(244,67,54,0.7);
         background: rgba(244,67,54,0.18);
         color: #ffebee;
-      }
-      .apply-feedback {
-        display: none; margin-top: 10px; padding: 8px 10px;
-        border-radius: 8px; font-size: 12px; line-height: 1.35;
-        border: 1px solid transparent;
-      }
-      .apply-feedback.is-visible { display: block; }
-      .apply-feedback.is-busy {
-        color: #d8e6ee; border-color: rgba(63,182,255,0.35);
-        background: rgba(63,182,255,0.1);
-      }
-      .apply-feedback.is-ok {
-        color: #eaffef; border-color: rgba(76,175,80,0.45);
-        background: rgba(76,175,80,0.16);
-      }
-      .apply-feedback.is-error {
-        color: #ffebee; border-color: rgba(244,67,54,0.45);
-        background: rgba(244,67,54,0.14);
       }
       .hint { margin-top: 12px; color: #6f93a6; font-size: 11px; line-height: 1.4; }
     `;
