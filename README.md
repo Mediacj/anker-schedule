@@ -51,9 +51,9 @@ type: custom:anker-schedule
 title: ANKER PLANNER
 enabled: true
 auto_apply: false
-entity: select.anker_solix_device_192_168_1_41_bedrijfsmodus_apparaat_werkt_in_externe_modus
-direction_entity: select.anker_solix_device_192_168_1_41_laad_ontlaadregeling
-power_entity: number.anker_solix_device_192_168_1_41_ingestelde_laad_ontlaadvermogen
+entity: select.anker_solix_device_bedrijfsmodus_apparaat_werkt_in_externe_modus
+direction_entity: select.anker_solix_device_laad_ontlaadregeling
+power_entity: number.anker_solix_device_ingestelde_laad_ontlaadvermogen
 nom_switch_entity: switch.anker_nom
 storage_entity: text.anker_schedule_schema
 nom_option: "0"
