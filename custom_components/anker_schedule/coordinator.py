@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -35,6 +36,7 @@ from .const import (
     DEFAULT_NOM_SWITCH,
     DEFAULT_OFF_OPTION,
     DEFAULT_POWER_STEP,
+    DEFAULT_MODE_SETTLE_SECONDS,
     DEFAULT_THIRD_PARTY_OPTION,
     DOMAIN,
     MODE_CHARGE,
@@ -326,6 +328,8 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     str(self._cfg(CONF_NOM_OPTION, DEFAULT_NOM_OPTION)),
                 )
             elif mode in (MODE_CHARGE, MODE_DISCHARGE):
+                # Eerst externe modus, dan 2s wachten tot laad/ontlaadregeling
+                # beschikbaar is, daarna richting en pas daarna vermogen.
                 await self._async_select_option(
                     mode_entity,
                     str(
@@ -334,6 +338,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                     ),
                 )
+                await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
                 await self._async_select_option(
                     direction,
                     str(

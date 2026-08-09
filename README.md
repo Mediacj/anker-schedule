@@ -119,8 +119,8 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 
 - **NOM** → bedrijfsmodus = `self_consumption`/`0` + NOM-switch UIT
 - **NOM-O** → alleen `switch.anker_nom` AAN (geen select-wijziging)
-- **Laden** → externe modus + charge + vermogen
-- **Ontladen** → externe modus + discharge + vermogen
+- **Laden** → externe modus (`3`), **2s wachten**, daarna charge + vermogen
+- **Ontladen** → externe modus (`3`), **2s wachten**, daarna discharge + vermogen
 - **Uit** → NOM-switch UIT (tenzij `off_option` gezet)
 
 Toepassen gebeurt bij HA-start, elk heel uur, en bij schema-wijzigingen voor het huidige uur.

@@ -68,41 +68,79 @@ class AnkerScheduleCard extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = {
-      ...DEFAULTS,
-      ...(config || {}),
-      colors: { ...DEFAULTS.colors, ...((config && config.colors) || {}) },
-    };
-    this._brush = this._brush || "nom";
-    this._selectedHour = this._selectedHour ?? null;
-    this._lastAppliedKey = null;
-    this._schedule = this._normalizeSchedule(
-      this._loadSchedule() ?? this._config.schedule
-    );
-    this._enabled =
-      this._loadEnabled() ??
-      (this._config.enabled !== undefined ? !!this._config.enabled : true);
+    try {
+      this._config = {
+        ...DEFAULTS,
+        ...(config || {}),
+        colors: { ...DEFAULTS.colors, ...((config && config.colors) || {}) },
+      };
+      this._brush = this._brush || "nom";
+      this._selectedHour = this._selectedHour ?? null;
+      this._lastAppliedKey = null;
+      this._schedule = this._normalizeSchedule(
+        this._loadSchedule() ?? this._config.schedule
+      );
+      this._enabled =
+        this._loadEnabled() ??
+        (this._config.enabled !== undefined ? !!this._config.enabled : true);
 
-    if (!this._built) {
-      this._buildDom();
-      this._built = true;
-    } else {
-      this._renderHours();
-      this._syncChrome();
-      this._renderEditorPanel();
+      if (!this._built) {
+        this._buildDom();
+        this._built = true;
+      } else {
+        this._renderHours();
+        this._syncChrome();
+        this._renderEditorPanel();
+      }
+      if (this._hass) this._refreshFromHass();
+    } catch (err) {
+      console.error("Anker Schedule Card: setConfig failed", err);
     }
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._built || !this._config) return;
-    this._hydrateFromIntegration();
-    this._pullStorageEntity();
-    this._renderStatus();
-    this._highlightCurrentHour();
-    this._syncPowerLimits();
-    if (this._shouldAutoApply()) {
-      this._maybeApplySchedule();
+    if (!this._config) return;
+    if (!this._built) {
+      // Hass kan eerder komen dan setConfig-rebuild; bouw zodra mogelijk.
+      try {
+        this._buildDom();
+        this._built = true;
+      } catch (err) {
+        console.error("Anker Schedule Card: build failed", err);
+        return;
+      }
+    }
+    this._refreshFromHass();
+  }
+
+  connectedCallback() {
+    if (this._config && !this._built) {
+      try {
+        this._buildDom();
+        this._built = true;
+      } catch (err) {
+        console.error("Anker Schedule Card: connected build failed", err);
+        return;
+      }
+    }
+    if (this._hass && this._built) this._refreshFromHass();
+  }
+
+  _refreshFromHass() {
+    if (!this._hass || !this._built || !this._config) return;
+    try {
+      this._hydrateFromIntegration();
+      this._pullStorageEntity();
+      this._renderStatus();
+      this._highlightCurrentHour();
+      this._syncPowerLimits();
+      this._syncChrome();
+      if (this._shouldAutoApply()) {
+        this._maybeApplySchedule();
+      }
+    } catch (err) {
+      console.error("Anker Schedule Card: refresh failed", err);
     }
   }
 
@@ -500,7 +538,7 @@ class AnkerScheduleCard extends HTMLElement {
 
           <div class="hint">
             NOM = eigen verbruik. NOM-O = alleen <code>switch.anker_nom</code> aan
-            (geen select-wijziging). Laden/ontladen = externe modus + richting + vermogen.
+            (geen select-wijziging). Laden/ontladen = externe modus, 2s wachten, daarna richting + vermogen.
             De Anker Schedule-integratie past elk uur toe (geen aparte automation nodig).
           </div>
         </div>
@@ -968,11 +1006,12 @@ class AnkerScheduleCard extends HTMLElement {
         return ok(`${summary} toegepast`);
       }
 
-      // charge / discharge → third_party + richting + vermogen
+      // charge / discharge → third_party, 2s wachten, dan richting, dan vermogen
       await this._selectOption(
         this._config.entity,
         this._config.third_party_option || "3"
       );
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
       await this._selectOption(
         this._config.direction_entity,
         slot.mode === "charge"
@@ -1202,6 +1241,13 @@ class AnkerScheduleCard extends HTMLElement {
 if (!customElements.get("anker-schedule")) {
   customElements.define("anker-schedule", AnkerScheduleCard);
 }
+
+// Als de module laat laadt, forceer Lovelace om onbekende cards opnieuw te tekenen.
+window.setTimeout(() => {
+  window.dispatchEvent(
+    new CustomEvent("ll-rebuild", { bubbles: true, composed: true })
+  );
+}, 0);
 
 class AnkerScheduleEditor extends HTMLElement {
   setConfig(config) {
