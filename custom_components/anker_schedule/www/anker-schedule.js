@@ -471,7 +471,7 @@ class AnkerScheduleCard extends HTMLElement {
         <div class="screen">
           <div class="header">
             <div class="brand">
-              <ha-icon icon="mdi:calendar-clock"></ha-icon>
+              <img class="brand-logo" alt="Energienerds" src="/anker_schedule/energienerds-logo.png">
               <div class="brand-text">
                 <div class="title"></div>
                 <div class="subtitle">24U · NOM / LADEN / ONTLADEN</div>
@@ -540,11 +540,10 @@ class AnkerScheduleCard extends HTMLElement {
       </div>
     `;
 
-    this.shadowRoot
-      ? (this.shadowRoot.innerHTML = "")
-      : this.attachShadow({ mode: "open" });
-    this.shadowRoot.appendChild(style);
-    this.shadowRoot.appendChild(card);
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: "open" });
+    }
+    this.shadowRoot.replaceChildren(style, card);
 
     this._els = {
       title: card.querySelector(".title"),
@@ -996,10 +995,11 @@ class AnkerScheduleCard extends HTMLElement {
     }
 
     try {
-      // Einde laad/ontlaadblok: overgang naar NOM / NOM-O / uit → vermogen 0
+      // Uit/leeg: altijd 0 W. Ook einde laad/ontlaadblok → NOM/NOM-O.
       if (
-        (slot.mode === "off" || slot.mode === "nom" || slot.mode === "nom_o") &&
-        this._previousSlotWasPower(hour)
+        slot.mode === "off" ||
+        ((slot.mode === "nom" || slot.mode === "nom_o") &&
+          this._previousSlotWasPower(hour))
       ) {
         await this._setPower(0);
       }
@@ -1068,10 +1068,10 @@ class AnkerScheduleCard extends HTMLElement {
         gap: 12px; margin-bottom: 14px;
       }
       .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-      .brand ha-icon {
-        color: var(--color-charge);
-        filter: drop-shadow(0 0 6px rgba(63,182,255,0.85));
-        --mdc-icon-size: 22px;
+      .brand-logo {
+        width: 28px; height: 28px; border-radius: 6px;
+        object-fit: contain; flex-shrink: 0;
+        box-shadow: 0 0 8px rgba(63,182,255,0.35);
       }
       .title {
         color: #eaf6ff; font-size: 15px; font-weight: 600; letter-spacing: 1.2px;
@@ -1259,16 +1259,51 @@ class AnkerScheduleCard extends HTMLElement {
   }
 }
 
+
+
+window.customCards = window.customCards || [];
+if (!window.customCards.some((c) => c.type === "anker-schedule")) {
+  window.customCards.push({
+    type: "anker-schedule",
+    name: "Anker Schedule",
+    description:
+      "Integratie-card: 24u NOM / NOM-O / laden / ontladen voor Anker Solix. Werkt zonder community resource.",
+    preview: true,
+  });
+}
+
 if (!customElements.get("anker-schedule")) {
   customElements.define("anker-schedule", AnkerScheduleCard);
 }
 
-// Als de module laat laadt, forceer Lovelace om onbekende cards opnieuw te tekenen.
-window.setTimeout(() => {
-  window.dispatchEvent(
-    new CustomEvent("ll-rebuild", { bubbles: true, composed: true })
-  );
-}, 0);
+function ankerScheduleNotifyReady() {
+  // Meerdere signalen: sommige HA-versies reageren alleen op één ervan.
+  try {
+    window.dispatchEvent(
+      new CustomEvent("ll-rebuild", { bubbles: true, composed: true })
+    );
+  } catch (_e) {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new Event("location-changed"));
+  } catch (_e) {
+    /* ignore */
+  }
+  try {
+    const ha = document.querySelector("home-assistant");
+    ha?.dispatchEvent?.(
+      new CustomEvent("ll-rebuild", { bubbles: true, composed: true })
+    );
+  } catch (_e) {
+    /* ignore */
+  }
+}
+
+// Herhaal kort na load: lost "Custom element doesn't exist" / lege view na navigatie op.
+[0, 100, 400, 1200, 3000].forEach((ms) => {
+  window.setTimeout(ankerScheduleNotifyReady, ms);
+});
 
 class AnkerScheduleEditor extends HTMLElement {
   setConfig(config) {
@@ -1621,13 +1656,3 @@ if (!customElements.get("anker-schedule-editor")) {
   customElements.define("anker-schedule-editor", AnkerScheduleEditor);
 }
 
-window.customCards = window.customCards || [];
-if (!window.customCards.some((c) => c.type === "anker-schedule")) {
-  window.customCards.push({
-    type: "anker-schedule",
-    name: "Anker Schedule",
-    description:
-      "Integratie-card: 24u NOM / NOM-O / laden / ontladen voor Anker Solix. Werkt zonder community resource.",
-    preview: true,
-  });
-}

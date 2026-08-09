@@ -15,7 +15,7 @@ from .const import CARD_FILENAME, DOMAIN, FRONTEND_URL_BASE
 
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 CARD_URL_PATH = f"{FRONTEND_URL_BASE}/{CARD_FILENAME}"
 CARD_URL = f"{CARD_URL_PATH}?v={VERSION}"
 
@@ -60,7 +60,7 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant) -> None:
         def _schedule(_: Any) -> None:
             hass.async_create_task(_try_register())
 
-        async_call_later(hass, 5, _schedule)
+        async_call_later(hass, 2, _schedule)
 
     async def _try_register() -> None:
         lovelace = hass.data.get("lovelace")

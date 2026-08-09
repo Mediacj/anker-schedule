@@ -37,14 +37,23 @@ De card wordt automatisch geladen via `/anker_schedule/anker-schedule.js`.
 
 ## Dashboard card
 
-Minimaal:
+### Entities in de card-YAML?
+
+Bij normaal gebruik via de integratie hoef je **geen** entities in de card-YAML te zetten.
+
+- **Integratie-config** (bij installeren/opties) is de bron. Daar staan de entities die elk uur door de backend worden aangestuurd.
+- **Card-YAML** is optioneel: alleen als je daar een entity invult, gebruikt de card die waarde. Lege velden worden automatisch uit de integratie gehaald (via de schema-text-entity).
+
+Minimaal is dus genoeg:
 
 ```yaml
 type: custom:anker-schedule
 title: ANKER PLANNER
 ```
 
-Volledig voorbeeld:
+Entities in de YAML zijn alleen nodig als je bewust iets anders wilt dan de integratie-config, of als je de card zonder integratie gebruikt.
+
+Volledig voorbeeld (alle overrides optioneel):
 
 ```yaml
 type: custom:anker-schedule
@@ -97,6 +106,13 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | `max_power` | number | `3500` | Maximum van de vermogensslider |
 | `min_power` | number | `0` | Minimum van de vermogensslider |
 | `power_step` | number | `50` | Stapgrootte slider (W) |
+| `colors.nom` | hex | `#1b8a3a` | Kleur NOM |
+| `colors.nom_o` | hex | `#00e5c0` | Kleur NOM-O |
+| `colors.charge` | hex | `#3fb6ff` | Kleur laden |
+| `colors.discharge` | hex | `#ff9800` | Kleur ontladen |
+| `colors.current` | hex | `#eaf6ff` | Accent huidig uur |
+| `colors.idle` | hex | `#7fa6b8` | Kleur uit/idle |
+
 
 \* `auto_apply` is impliciet `false` zodra er een `storage_entity` (of auto-discovered schema-text) is.
 
@@ -122,6 +138,6 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 - **Laden** → externe modus (`3`), **2s wachten**, daarna charge + vermogen
 - **Ontladen** → externe modus (`3`), **2s wachten**, daarna discharge + vermogen
 - **Einde laad/ontlaadblok** → als het volgende uur NOM / NOM-O / uit is, wordt het vermogen op **0 W** gezet
-- **Uit** → NOM-switch UIT (tenzij `off_option` gezet)
+- **Uit / leeggemaakt** → vermogen op **0 W** + NOM-switch UIT (tenzij `off_option` gezet)
 
 Toepassen gebeurt bij HA-start, elk heel uur, en bij schema-wijzigingen voor het huidige uur.
