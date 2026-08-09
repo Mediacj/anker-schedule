@@ -923,6 +923,11 @@ class AnkerScheduleCard extends HTMLElement {
     }
   }
 
+  _previousSlotWasPower(hour) {
+    const prev = this._schedule[(hour + 23) % 24];
+    return !!prev && (prev.mode === "charge" || prev.mode === "discharge");
+  }
+
   _describeSlot(hour, slot) {
     const label = MODE_LABEL[slot.mode] || slot.mode;
     const hh = String(hour).padStart(2, "0");
@@ -986,6 +991,14 @@ class AnkerScheduleCard extends HTMLElement {
     }
 
     try {
+      // Einde laad/ontlaadblok: overgang naar NOM / NOM-O / uit → vermogen 0
+      if (
+        (slot.mode === "off" || slot.mode === "nom" || slot.mode === "nom_o") &&
+        this._previousSlotWasPower(hour)
+      ) {
+        await this._setPower(0);
+      }
+
       // NOM-O: alleen switch aan; raakt de bedrijfsmodus-select niet
       await this._setNomSwitch(slot.mode === "nom_o");
 

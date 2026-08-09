@@ -275,6 +275,12 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             blocking=True,
         )
 
+
+    def _previous_slot_was_power(self, hour: int) -> bool:
+        """True if the previous schedule hour was charge or discharge."""
+        prev = self.data["hours"][(hour - 1) % 24]
+        return prev["mode"] in (MODE_CHARGE, MODE_DISCHARGE)
+
     async def async_apply_schedule(self, *, force: bool = False) -> None:
         """Apply the slot for the current hour to Anker entities."""
         hour = dt_util.now().hour
@@ -313,6 +319,12 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             mode = slot["mode"]
+            # Einde laad/ontlaadblok: bij overgang naar NOM / NOM-O / uit → vermogen 0
+            if mode in (MODE_OFF, MODE_NOM, MODE_NOM_O) and self._previous_slot_was_power(
+                hour
+            ):
+                await self._async_set_power(power_entity, 0)
+
             # NOM-O: alleen switch aan; raakt de bedrijfsmodus-select niet
             await self._async_set_nom_switch(mode == MODE_NOM_O)
 
