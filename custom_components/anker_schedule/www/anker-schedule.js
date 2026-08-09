@@ -493,8 +493,8 @@ class AnkerScheduleCard extends HTMLElement {
               <div class="stat-value hour-value">—</div>
             </div>
             <div class="status-block">
-              <div class="stat-label">PLAN</div>
-              <div class="stat-value plan-value">—</div>
+              <div class="stat-label">MODUS STRAKS</div>
+              <div class="stat-value next-mode-value">—</div>
             </div>
           </div>
 
@@ -536,11 +536,6 @@ class AnkerScheduleCard extends HTMLElement {
             <button type="button" class="apply-now-btn" data-action="apply-now">Nu toepassen</button>
           </div>
 
-          <div class="hint">
-            NOM = eigen verbruik. NOM-O = alleen <code>switch.anker_nom</code> aan
-            (geen select-wijziging). Laden/ontladen = externe modus, 2s wachten, daarna richting + vermogen.
-            De Anker Schedule-integratie past elk uur toe (geen aparte automation nodig).
-          </div>
         </div>
       </div>
     `;
@@ -557,7 +552,7 @@ class AnkerScheduleCard extends HTMLElement {
       toggleLabel: card.querySelector(".toggle-label"),
       modeValue: card.querySelector(".mode-value"),
       hourValue: card.querySelector(".hour-value"),
-      planValue: card.querySelector(".plan-value"),
+      nextModeValue: card.querySelector(".next-mode-value"),
       hours: card.querySelector(".hours"),
       screen: card.querySelector(".screen"),
       brushes: Array.from(card.querySelectorAll(".brush")),
@@ -764,11 +759,20 @@ class AnkerScheduleCard extends HTMLElement {
       btn.classList.toggle("active", btn.dataset.brush === this._brush);
     });
 
-    const counts = { nom: 0, nom_o: 0, charge: 0, discharge: 0 };
-    this._schedule.forEach((s) => {
-      if (counts[s.mode] !== undefined) counts[s.mode] += 1;
-    });
-    this._els.planValue.textContent = `${counts.nom}N ${counts.nom_o}NO ${counts.charge}L ${counts.discharge}O`;
+    this._updateNextMode();
+  }
+
+  _updateNextMode() {
+    if (!this._els?.nextModeValue || !this._schedule) return;
+    const nextHour = (new Date().getHours() + 1) % 24;
+    const slot = this._schedule[nextHour] || this._defaultSlot();
+    const label = MODE_LABEL[slot.mode] || slot.mode;
+    if (slot.mode === "charge" || slot.mode === "discharge") {
+      this._els.nextModeValue.textContent = `${label} ${Math.round(slot.power || 0)}W`;
+    } else {
+      this._els.nextModeValue.textContent = label;
+    }
+    this._els.nextModeValue.dataset.mode = slot.mode;
   }
 
   _highlightCurrentHour() {
@@ -780,6 +784,7 @@ class AnkerScheduleCard extends HTMLElement {
     if (this._els?.hourValue) {
       this._els.hourValue.textContent = `${String(now).padStart(2, "0")}:00`;
     }
+    this._updateNextMode();
   }
 
   _resolveOption(entityId, wanted) {
@@ -1246,7 +1251,10 @@ class AnkerScheduleCard extends HTMLElement {
         background: rgba(244,67,54,0.18);
         color: #ffebee;
       }
-      .hint { margin-top: 12px; color: #6f93a6; font-size: 11px; line-height: 1.4; }
+      .next-mode-value[data-mode="nom"] { color: var(--color-nom); }
+      .next-mode-value[data-mode="nom_o"] { color: var(--color-nom-o); }
+      .next-mode-value[data-mode="charge"] { color: var(--color-charge); }
+      .next-mode-value[data-mode="discharge"] { color: var(--color-discharge); }
     `;
   }
 }
