@@ -995,16 +995,12 @@ class AnkerScheduleCard extends HTMLElement {
     }
 
     try {
-      // Uit/leeg: altijd 0 W. Ook einde laad/ontlaadblok → NOM/NOM-O.
-      if (
-        slot.mode === "off" ||
-        ((slot.mode === "nom" || slot.mode === "nom_o") &&
-          this._previousSlotWasPower(hour))
-      ) {
+      // NOM-O: uitsluitend de NOM-switch — verder niets.
+      // Vermogen 0 alleen bij leeg/uit (niet bij NOM of NOM-O).
+      if (slot.mode === "off") {
         await this._setPower(0);
       }
 
-      // NOM-O: alleen switch aan; raakt de bedrijfsmodus-select niet
       await this._setNomSwitch(slot.mode === "nom_o");
 
       if (slot.mode === "off" || slot.mode === "nom_o") {

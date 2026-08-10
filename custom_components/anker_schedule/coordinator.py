@@ -319,14 +319,11 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             mode = slot["mode"]
-            # Uit/leeg: altijd vermogen 0. Ook bij einde laad/ontlaadblok → NOM/NOM-O.
-            if mode == MODE_OFF or (
-                mode in (MODE_NOM, MODE_NOM_O)
-                and self._previous_slot_was_power(hour)
-            ):
+            # NOM-O: uitsluitend de NOM-switch — verder niets.
+            # Vermogen 0 alleen bij overgang naar leeg/uit (niet bij NOM of NOM-O).
+            if mode == MODE_OFF:
                 await self._async_set_power(power_entity, 0)
 
-            # NOM-O: alleen switch aan; raakt de bedrijfsmodus-select niet
             await self._async_set_nom_switch(mode == MODE_NOM_O)
 
             if mode == MODE_OFF:

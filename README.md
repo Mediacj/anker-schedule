@@ -134,10 +134,10 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 ## Gedrag
 
 - **NOM** → bedrijfsmodus = `self_consumption`/`0` + NOM-switch UIT
-- **NOM-O** → alleen `switch.anker_nom` AAN (geen select-wijziging)
+- **NOM-O** → alleen `switch.anker_nom` AAN (geen select, geen vermogen)
 - **Laden** → externe modus (`3`), **2s wachten**, daarna charge + vermogen
 - **Ontladen** → externe modus (`3`), **2s wachten**, daarna discharge + vermogen
-- **Einde laad/ontlaadblok** → als het volgende uur NOM / NOM-O / uit is, wordt het vermogen op **0 W** gezet
-- **Uit / leeggemaakt** → vermogen op **0 W** + NOM-switch UIT (tenzij `off_option` gezet)
+- **Uit / leeg** → vermogen op **0 W** + NOM-switch UIT (tenzij `off_option` gezet)
+- **Na laden/ontladen → NOM of NOM-O** → geen vermogen-reset aan het einde van het uur
 
 Toepassen gebeurt bij HA-start, elk heel uur, en bij schema-wijzigingen voor het huidige uur.
