@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.9";
+const CARD_VERSION = "1.0.10";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -38,6 +38,7 @@ const DEFAULTS = {
   charge_soc_entity: "",
   discharge_soc_entity: "",
   nom_switch_entity: "switch.anker_nom",
+  nom_o_label: "NOM-O",
   show_soc: false,
   default_charge_soc: 100,
   default_discharge_soc: 10,
@@ -281,6 +282,18 @@ class AnkerScheduleCard extends HTMLElement {
 
   _showSoc() {
     return !!this._config?.show_soc;
+  }
+
+  /** Eigen tekst voor NOM-O; leeg valt terug op de standaardnaam. */
+  _nomOLabel() {
+    const raw = this._config?.nom_o_label;
+    const label = typeof raw === "string" ? raw.trim() : "";
+    return label || MODE_LABEL.nom_o;
+  }
+
+  _modeLabel(mode) {
+    if (mode === "nom_o") return this._nomOLabel();
+    return MODE_LABEL[mode] || mode;
   }
 
   _defaultSlot() {
@@ -624,7 +637,7 @@ class AnkerScheduleCard extends HTMLElement {
 
           <div class="legend">
             <span><i class="swatch nom"></i>NOM</span>
-            <span><i class="swatch nom_o"></i>NOM-O</span>
+            <span><i class="swatch nom_o"></i><span class="legend-nom-o">NOM-O</span></span>
             <span><i class="swatch charge"></i>Laden</span>
             <span><i class="swatch discharge"></i>Ontladen</span>
             <span><i class="swatch current"></i>Nu</span>
@@ -655,6 +668,8 @@ class AnkerScheduleCard extends HTMLElement {
       hours: card.querySelector(".hours"),
       screen: card.querySelector(".screen"),
       brushes: Array.from(card.querySelectorAll(".brush")),
+      nomOBrush: card.querySelector('.brush[data-brush="nom_o"]'),
+      nomOLegend: card.querySelector(".legend-nom-o"),
       editorPanel: card.querySelector(".editor-panel"),
       editorTitle: card.querySelector(".editor-title"),
       editorMode: card.querySelector(".editor-mode"),
@@ -795,10 +810,11 @@ class AnkerScheduleCard extends HTMLElement {
     );
     btn.classList.add(`mode-${slot.mode}`);
     btn.classList.toggle("selected", this._selectedHour === h);
+    const custom = this._nomOLabel();
     const tags = {
       off: "—",
       nom: "NOM",
-      nom_o: "N-O",
+      nom_o: custom === MODE_LABEL.nom_o ? "N-O" : custom,
       charge: "IN",
       discharge: "UIT",
     };
@@ -855,7 +871,7 @@ class AnkerScheduleCard extends HTMLElement {
     this._els.editorTitle.textContent = `Uur ${String(h).padStart(2, "0")}–${String(
       (h + 1) % 24
     ).padStart(2, "0")}`;
-    this._els.editorMode.textContent = MODE_LABEL[slot.mode] || slot.mode;
+    this._els.editorMode.textContent = this._modeLabel(slot.mode);
     this._els.editorMode.dataset.mode = slot.mode;
 
     const needsPower = slot.mode === "charge" || slot.mode === "discharge";
@@ -895,6 +911,9 @@ class AnkerScheduleCard extends HTMLElement {
     this._els.screen.style.setProperty("--color-current", c.current);
     this._els.screen.style.setProperty("--color-idle", c.idle);
     this._els.title.textContent = this._config.title || DEFAULTS.title;
+    const nomOLabel = this._nomOLabel();
+    if (this._els.nomOBrush) this._els.nomOBrush.textContent = nomOLabel;
+    if (this._els.nomOLegend) this._els.nomOLegend.textContent = nomOLabel;
     this._els.toggleBtn.classList.toggle("is-on", this._enabled);
     this._els.toggleLabel.textContent = this._enabled ? "AAN" : "UIT";
     this._els.screen.classList.toggle("scheduler-off", !this._enabled);
@@ -910,7 +929,7 @@ class AnkerScheduleCard extends HTMLElement {
     if (!this._els?.nextModeValue || !this._schedule) return;
     const nextHour = (new Date().getHours() + 1) % 24;
     const slot = this._schedule[nextHour] || this._defaultSlot();
-    const label = MODE_LABEL[slot.mode] || slot.mode;
+    const label = this._modeLabel(slot.mode);
     if (slot.mode === "charge" || slot.mode === "discharge") {
       this._els.nextModeValue.textContent = `${label} ${Math.round(slot.power || 0)}W`;
     } else {
@@ -989,7 +1008,7 @@ class AnkerScheduleCard extends HTMLElement {
     }
     const nomSw = this._hass.states[this._nomSwitchEntity()]?.state;
     if (mode !== "Extern" && nomSw === "on") {
-      this._els.modeValue.textContent = "NOM-O";
+      this._els.modeValue.textContent = this._nomOLabel();
       this._els.modeValue.classList.add("is-self");
       return;
     }
@@ -1090,7 +1109,7 @@ class AnkerScheduleCard extends HTMLElement {
   }
 
   _describeSlot(hour, slot) {
-    const label = MODE_LABEL[slot.mode] || slot.mode;
+    const label = this._modeLabel(slot.mode);
     const hh = String(hour).padStart(2, "0");
     if (slot.mode === "charge" || slot.mode === "discharge") {
       return `Uur ${hh}:00 → ${label} ${Math.round(slot.power || 0)} W`;
@@ -1329,7 +1348,11 @@ class AnkerScheduleCard extends HTMLElement {
       .hour:hover { filter: brightness(1.12); }
       .hour:active { transform: scale(0.96); }
       .hour-num { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
-      .hour-tag { font-size: 9px; letter-spacing: 0.3px; opacity: 0.85; }
+      .hour-tag {
+        font-size: 9px; letter-spacing: 0.3px; opacity: 0.85;
+        max-width: 100%; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap;
+      }
       .hour-power { font-size: 9px; opacity: 0.9; }
       .hour.mode-nom {
         color: #eaffef; border-color: rgba(27,138,58,0.8);
@@ -1519,6 +1542,10 @@ class AnkerScheduleEditor extends HTMLElement {
             <label>Titel</label>
             <input type="text" data-key="title" placeholder="ANKER PLANNER">
           </div>
+          <div class="row">
+            <label>Tekst NOM-O-knop (nom_o_label)</label>
+            <input type="text" data-key="nom_o_label" placeholder="NOM-O">
+          </div>
           <label class="check-row">
             <input type="checkbox" data-key="enabled">
             Planner standaard aan (enabled)
@@ -1632,6 +1659,7 @@ class AnkerScheduleEditor extends HTMLElement {
 
       const textKeys = [
         "title",
+        "nom_o_label",
         "nom_option",
         "third_party_option",
         "charge_option",
@@ -1738,6 +1766,7 @@ class AnkerScheduleEditor extends HTMLElement {
 
     const syncText = [
       "title",
+      "nom_o_label",
       "nom_option",
       "third_party_option",
       "charge_option",
