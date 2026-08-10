@@ -4,6 +4,8 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
+const CARD_VERSION = "1.0.8";
+const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
 const MODE_LABEL = {
@@ -95,6 +97,20 @@ class AnkerScheduleCard extends HTMLElement {
       if (this._hass) this._refreshFromHass();
     } catch (err) {
       console.error("Anker Schedule Card: setConfig failed", err);
+      this._renderFallback(err);
+    }
+  }
+
+  /** Toon een leesbare melding i.p.v. een lege card als opbouw faalt. */
+  _renderFallback(err) {
+    try {
+      if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+      const card = document.createElement("ha-card");
+      card.style.padding = "16px";
+      card.textContent = `Anker Schedule: ${err?.message || err}`;
+      this.shadowRoot.replaceChildren(card);
+    } catch (_e) {
+      /* ignore */
     }
   }
 
@@ -108,6 +124,7 @@ class AnkerScheduleCard extends HTMLElement {
         this._built = true;
       } catch (err) {
         console.error("Anker Schedule Card: build failed", err);
+        this._renderFallback(err);
         return;
       }
     }
@@ -121,6 +138,7 @@ class AnkerScheduleCard extends HTMLElement {
         this._built = true;
       } catch (err) {
         console.error("Anker Schedule Card: connected build failed", err);
+        this._renderFallback(err);
         return;
       }
     }
@@ -147,14 +165,19 @@ class AnkerScheduleCard extends HTMLElement {
   /** Zoek de text-entity van de Anker Schedule-integratie. */
   _discoverStorageEntity() {
     if (!this._hass?.states) return null;
+    // set hass vuurt bij elke state-change; hergebruik de vondst.
+    const cached = this._discoveredStorageEntity;
+    if (cached && this._hass.states[cached]) return cached;
     for (const [entityId, st] of Object.entries(this._hass.states)) {
       if (
         entityId.startsWith("text.") &&
         st?.attributes?.anker_schedule_storage
       ) {
+        this._discoveredStorageEntity = entityId;
         return entityId;
       }
     }
+    this._discoveredStorageEntity = null;
     return null;
   }
 
@@ -471,7 +494,7 @@ class AnkerScheduleCard extends HTMLElement {
         <div class="screen">
           <div class="header">
             <div class="brand">
-              <img class="brand-logo" alt="Energienerds" src="/anker_schedule/energienerds-logo.png">
+              <img class="brand-logo" src="${LOGO_URL}" alt="Energienerds" width="28" height="28">
               <div class="brand-text">
                 <div class="title"></div>
                 <div class="subtitle">24U · NOM / LADEN / ONTLADEN</div>
@@ -1065,9 +1088,10 @@ class AnkerScheduleCard extends HTMLElement {
       }
       .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
       .brand-logo {
-        width: 28px; height: 28px; border-radius: 6px;
-        object-fit: contain; flex-shrink: 0;
+        width: 28px; height: 28px; border-radius: 50%;
+        object-fit: cover; flex-shrink: 0;
         box-shadow: 0 0 8px rgba(63,182,255,0.35);
+        background: #000;
       }
       .title {
         color: #eaf6ff; font-size: 15px; font-weight: 600; letter-spacing: 1.2px;
@@ -1271,35 +1295,6 @@ if (!window.customCards.some((c) => c.type === "anker-schedule")) {
 if (!customElements.get("anker-schedule")) {
   customElements.define("anker-schedule", AnkerScheduleCard);
 }
-
-function ankerScheduleNotifyReady() {
-  // Meerdere signalen: sommige HA-versies reageren alleen op één ervan.
-  try {
-    window.dispatchEvent(
-      new CustomEvent("ll-rebuild", { bubbles: true, composed: true })
-    );
-  } catch (_e) {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new Event("location-changed"));
-  } catch (_e) {
-    /* ignore */
-  }
-  try {
-    const ha = document.querySelector("home-assistant");
-    ha?.dispatchEvent?.(
-      new CustomEvent("ll-rebuild", { bubbles: true, composed: true })
-    );
-  } catch (_e) {
-    /* ignore */
-  }
-}
-
-// Herhaal kort na load: lost "Custom element doesn't exist" / lege view na navigatie op.
-[0, 100, 400, 1200, 3000].forEach((ms) => {
-  window.setTimeout(ankerScheduleNotifyReady, ms);
-});
 
 class AnkerScheduleEditor extends HTMLElement {
   setConfig(config) {

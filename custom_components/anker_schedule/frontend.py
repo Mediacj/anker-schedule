@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
@@ -15,11 +15,32 @@ from .const import CARD_FILENAME, DOMAIN, FRONTEND_URL_BASE
 
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "1.0.7"
+_MANIFEST_PATH = Path(__file__).parent / "manifest.json"
+try:
+    VERSION = json.loads(_MANIFEST_PATH.read_text(encoding="utf-8")).get(
+        "version", "0"
+    )
+except Exception:  # noqa: BLE001
+    VERSION = "0"
+
 CARD_URL_PATH = f"{FRONTEND_URL_BASE}/{CARD_FILENAME}"
 CARD_URL = f"{CARD_URL_PATH}?v={VERSION}"
 
 _DATA_FRONTEND = f"{DOMAIN}_frontend_registered"
+
+
+def _add_frontend_url(hass: HomeAssistant, url: str) -> None:
+    """Register as ES module; modules met dezelfde URL laden maar één keer."""
+    try:
+        from homeassistant.components.frontend import add_extra_module_url
+
+        add_extra_module_url(hass, url)
+        return
+    except ImportError:
+        pass
+    from homeassistant.components.frontend import add_extra_js_url
+
+    add_extra_js_url(hass, url)
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
@@ -45,7 +66,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     except RuntimeError:
         _LOGGER.debug("Static path %s already registered", FRONTEND_URL_BASE)
 
-    add_extra_js_url(hass, CARD_URL)
+    _add_frontend_url(hass, CARD_URL)
     hass.async_create_task(_async_ensure_lovelace_resource(hass))
 
     hass.data[_DATA_FRONTEND] = True
@@ -72,7 +93,7 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant) -> None:
         if resources is None:
             _LOGGER.debug(
                 "Lovelace resources niet beschikbaar (YAML-mode?): "
-                "card laadt via add_extra_js_url (%s)",
+                "card laadt via frontend extra url (%s)",
                 CARD_URL,
             )
             return
@@ -90,25 +111,43 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant) -> None:
             _LOGGER.debug("Kon Lovelace resources niet uitlezen", exc_info=True)
             return
 
-        existing = None
+        # Alle resources die naar deze card wijzen samenvoegen tot één entry,
+        # zodat oude ?v= of dubbele entries niet blijven hangen.
+        matches = []
         for item in items:
-            url = str(item.get("url", ""))
-            if url.split("?", 1)[0] == CARD_URL_PATH:
-                existing = item
-                break
+            path = str(item.get("url", "")).split("?", 1)[0]
+            if path == CARD_URL_PATH or path.endswith(f"/{CARD_FILENAME}"):
+                matches.append(item)
 
         try:
-            if existing is None:
+            if not matches:
                 await resources.async_create_item(
                     {"res_type": "module", "url": CARD_URL}
                 )
                 _LOGGER.info("Lovelace resource toegevoegd: %s", CARD_URL)
-            elif existing.get("url") != CARD_URL:
+                return
+
+            primary = matches[0]
+            if primary.get("url") != CARD_URL:
                 await resources.async_update_item(
-                    existing["id"],
+                    primary["id"],
                     {"res_type": "module", "url": CARD_URL},
                 )
                 _LOGGER.info("Lovelace resource bijgewerkt: %s", CARD_URL)
+
+            for dup in matches[1:]:
+                try:
+                    await resources.async_delete_item(dup["id"])
+                    _LOGGER.info(
+                        "Dubbele Lovelace resource verwijderd: %s",
+                        dup.get("url"),
+                    )
+                except Exception:  # noqa: BLE001
+                    _LOGGER.debug(
+                        "Kon dubbele resource niet verwijderen: %s",
+                        dup.get("url"),
+                        exc_info=True,
+                    )
         except Exception:  # noqa: BLE001
             _LOGGER.warning(
                 "Kon Lovelace resource niet registreren; "
