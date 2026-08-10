@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.11";
+const CARD_VERSION = "1.0.12";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -585,7 +585,9 @@ class AnkerScheduleCard extends HTMLElement {
         <div class="screen">
           <div class="header">
             <div class="brand">
-              <img class="brand-logo" src="${LOGO_URL}" alt="Energienerds" width="28" height="28">
+              <a class="brand-link" href="https://energienerds.nl/" target="_blank" rel="noopener noreferrer" title="energienerds.nl">
+                <img class="brand-logo" src="${LOGO_URL}" alt="Energienerds" width="28" height="28">
+              </a>
               <div class="brand-text">
                 <div class="title"></div>
                 <div class="subtitle">24U · NOM / LADEN / ONTLADEN</div>
@@ -1254,8 +1256,13 @@ class AnkerScheduleCard extends HTMLElement {
         gap: 12px; margin-bottom: 14px;
       }
       .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+      .brand-link {
+        display: inline-flex; line-height: 0; border-radius: 50%;
+        text-decoration: none; flex-shrink: 0;
+      }
+      .brand-link:hover .brand-logo { filter: brightness(1.15); }
       .brand-logo {
-        width: 28px; height: 28px; border-radius: 50%;
+        width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
         object-fit: cover; flex-shrink: 0;
         box-shadow: 0 0 8px rgba(63,182,255,0.35);
         background: #000;
@@ -1365,10 +1372,13 @@ class AnkerScheduleCard extends HTMLElement {
         color: #eaffef; border-color: rgba(27,138,58,0.8);
         background: rgba(27,138,58,0.28); box-shadow: 0 0 8px rgba(27,138,58,0.3);
       }
+      /* Lichte vulling met donkere tekst: duidelijk anders dan het donkergroene NOM. */
       .hour.mode-nom_o {
-        color: #eafffa; border-color: rgba(0,229,192,0.9);
-        background: rgba(0,229,192,0.22); box-shadow: 0 0 10px rgba(0,229,192,0.4);
+        color: #05302a; border-color: rgba(0,229,192,1);
+        background: linear-gradient(180deg, rgba(0,229,192,0.9), rgba(0,229,192,0.62));
+        box-shadow: 0 0 12px rgba(0,229,192,0.5);
       }
+      .hour.mode-nom_o .hour-tag, .hour.mode-nom_o .hour-power { opacity: 1; }
       .hour.mode-charge {
         color: #eaf6ff; border-color: rgba(63,182,255,0.55);
         background: rgba(63,182,255,0.18); box-shadow: 0 0 8px rgba(63,182,255,0.22);
