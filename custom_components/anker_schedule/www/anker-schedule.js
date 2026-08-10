@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.13";
+const CARD_VERSION = "1.0.14";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -824,8 +824,8 @@ class AnkerScheduleCard extends HTMLElement {
       off: "—",
       nom: "NOM",
       nom_o: this._nomOTag(),
-      charge: "IN",
-      discharge: "UIT",
+      charge: "IMP",
+      discharge: "EXP",
     };
     btn.querySelector(".hour-tag").textContent = tags[slot.mode] || "—";
     const powerEl = btn.querySelector(".hour-power");
@@ -1537,7 +1537,7 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === "anker-schedule")) {
   window.customCards.push({
     type: "anker-schedule",
-    name: "Anker Schedule",
+    name: "Anker SOLIX Schedule",
     description:
       "Integratie-card: 24u NOM / NOM-O / laden / ontladen voor Anker Solix. Werkt zonder community resource.",
     preview: true,

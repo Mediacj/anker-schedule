@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Anker Schedule",
+        "title": "Anker SOLIX Schedule",
         "description": "Koppel de Anker bedrijfsmodus-, richting-, vermogen- en NOM-switch entities. De integratie past het 24u-schema elk uur toe.",
         "data": {
           "name": "Naam",
@@ -32,7 +32,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Anker Schedule - instellingen",
+        "title": "Anker SOLIX Schedule - instellingen",
         "description": "Pas gekoppelde entities en vermogenslimieten aan.",
         "data": {
           "name": "Naam",

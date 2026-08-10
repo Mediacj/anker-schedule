@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/energienerds.png" alt="Energienerds" width="140">
 </p>
 
-<h1 align="center">Anker Schedule</h1>
+<h1 align="center">Anker SOLIX Schedule</h1>
 
 <p align="center">
   Home Assistant-integratie van <a href="https://energienerds.nl/">Energienerds.nl</a><br>
@@ -26,7 +26,7 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / NOM-O / 
 
 1. Installeer via HACS (custom repository) of kopieer `custom_components/anker_schedule` naar je Home Assistant `custom_components`-map.
 2. Herstart Home Assistant.
-3. Ga naar **Instellingen → Apparaten en services → Integratie toevoegen** en zoek **Anker Schedule**.
+3. Ga naar **Instellingen → Apparaten en services → Integratie toevoegen** en zoek **Anker SOLIX Schedule**.
 4. Kies zelf je entities (velden starten leeg):
    - Bedrijfsmodus select
    - Laad/ontlaadregeling select

@@ -22,7 +22,7 @@ CONF_POWER_STEP = "power_step"
 CONF_DEFAULT_CHARGE_SOC = "default_charge_soc"
 CONF_DEFAULT_DISCHARGE_SOC = "default_discharge_soc"
 
-DEFAULT_NAME = "Anker Schedule"
+DEFAULT_NAME = "Anker SOLIX Schedule"
 DEFAULT_NOM_OPTION = "0"
 DEFAULT_THIRD_PARTY_OPTION = "3"
 DEFAULT_CHARGE_OPTION = "0"
