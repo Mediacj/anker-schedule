@@ -129,6 +129,8 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | `colors.current` | hex | `#eaf6ff` | Accent huidig uur |
 | `colors.idle` | hex | `#7fa6b8` | Kleur uit/idle |
 
+De moduskleuren bepalen niet alleen de legenda, maar ook de vulling, rand en gloed van de uurtegels. Rand, gloed en tekstkleur worden automatisch uit de gekozen kleur afgeleid. NOM-O krijgt bewust een lichte vulling met donkere tekst, zodat die tegels zich onderscheiden van NOM.
+
 
 \* `auto_apply` is impliciet `false` zodra er een `storage_entity` (of auto-discovered schema-text) is.
 

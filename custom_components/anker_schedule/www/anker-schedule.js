@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.12";
+const CARD_VERSION = "1.0.13";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -910,6 +910,57 @@ class AnkerScheduleCard extends HTMLElement {
     }
   }
 
+  /** #rgb / #rrggbb → {r,g,b}; null bij een niet-hex waarde. */
+  _rgbOf(color) {
+    let hex = String(color || "").trim().replace(/^#/, "");
+    if (hex.length === 3) hex = hex.split("").map((ch) => ch + ch).join("");
+    if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+    return {
+      r: parseInt(hex.slice(0, 2), 16),
+      g: parseInt(hex.slice(2, 4), 16),
+      b: parseInt(hex.slice(4, 6), 16),
+    };
+  }
+
+  _rgba(color, alpha) {
+    const c = this._rgbOf(color);
+    if (!c) return color;
+    return `rgba(${c.r},${c.g},${c.b},${alpha})`;
+  }
+
+  /** Mengt richting wit (amount > 0) of zwart (amount < 0). */
+  _shade(color, amount) {
+    const c = this._rgbOf(color);
+    if (!c) return color;
+    const target = amount >= 0 ? 255 : 0;
+    const f = Math.abs(amount);
+    const mix = (v) => Math.round(v + (target - v) * f);
+    return `rgb(${mix(c.r)},${mix(c.g)},${mix(c.b)})`;
+  }
+
+  /** Vertaalt de gekozen moduskleuren naar vulling, rand, gloed en tekst. */
+  _applyTileColors(c) {
+    const s = this._els.screen.style;
+    const nomO = c.nom_o || c.nom;
+    const solid = [
+      ["nom", c.nom, 0.28, 0.8, 0.3],
+      ["charge", c.charge, 0.18, 0.55, 0.22],
+      ["discharge", c.discharge, 0.18, 0.55, 0.22],
+    ];
+    solid.forEach(([key, color, fill, border, glow]) => {
+      s.setProperty(`--fill-${key}`, this._rgba(color, fill));
+      s.setProperty(`--border-${key}`, this._rgba(color, border));
+      s.setProperty(`--glow-${key}`, this._rgba(color, glow));
+      s.setProperty(`--tint-${key}`, this._shade(color, 0.85));
+    });
+    s.setProperty(
+      "--fill-nom-o",
+      `linear-gradient(180deg, ${this._rgba(nomO, 0.9)}, ${this._rgba(nomO, 0.62)})`
+    );
+    s.setProperty("--glow-nom-o", this._rgba(nomO, 0.5));
+    s.setProperty("--shade-nom-o", this._shade(nomO, -0.8));
+  }
+
   _syncChrome() {
     if (!this._els) return;
     const c = this._config.colors;
@@ -919,6 +970,7 @@ class AnkerScheduleCard extends HTMLElement {
     this._els.screen.style.setProperty("--color-discharge", c.discharge);
     this._els.screen.style.setProperty("--color-current", c.current);
     this._els.screen.style.setProperty("--color-idle", c.idle);
+    this._applyTileColors(c);
     this._els.title.textContent = this._config.title || DEFAULTS.title;
     const nomOLabel = this._nomOLabel();
     if (this._els.nomOBrush) this._els.nomOBrush.textContent = nomOLabel;
@@ -1244,6 +1296,21 @@ class AnkerScheduleCard extends HTMLElement {
         --color-discharge: #ff9800;
         --color-current: #eaf6ff;
         --color-idle: #7fa6b8;
+        --fill-nom: rgba(27,138,58,0.28);
+        --border-nom: rgba(27,138,58,0.8);
+        --glow-nom: rgba(27,138,58,0.3);
+        --tint-nom: #eaffef;
+        --fill-nom-o: linear-gradient(180deg, rgba(0,229,192,0.9), rgba(0,229,192,0.62));
+        --glow-nom-o: rgba(0,229,192,0.5);
+        --shade-nom-o: #05302a;
+        --fill-charge: rgba(63,182,255,0.18);
+        --border-charge: rgba(63,182,255,0.55);
+        --glow-charge: rgba(63,182,255,0.22);
+        --tint-charge: #eaf6ff;
+        --fill-discharge: rgba(255,152,0,0.18);
+        --border-discharge: rgba(255,152,0,0.55);
+        --glow-discharge: rgba(255,152,0,0.22);
+        --tint-discharge: #fff3e0;
         border-radius: var(--ha-card-border-radius, 12px);
         padding: 16px 18px 18px;
         overflow: hidden;
@@ -1368,24 +1435,25 @@ class AnkerScheduleCard extends HTMLElement {
         text-overflow: ellipsis; white-space: nowrap;
       }
       .hour-power { font-size: 9px; opacity: 0.9; }
+      /* Vulling volgt de kleuren uit de card-config; zie _syncChrome. */
       .hour.mode-nom {
-        color: #eaffef; border-color: rgba(27,138,58,0.8);
-        background: rgba(27,138,58,0.28); box-shadow: 0 0 8px rgba(27,138,58,0.3);
+        color: var(--tint-nom); border-color: var(--border-nom);
+        background: var(--fill-nom); box-shadow: 0 0 8px var(--glow-nom);
       }
-      /* Lichte vulling met donkere tekst: duidelijk anders dan het donkergroene NOM. */
+      /* Lichte vulling met donkere tekst: duidelijk anders dan NOM. */
       .hour.mode-nom_o {
-        color: #05302a; border-color: rgba(0,229,192,1);
-        background: linear-gradient(180deg, rgba(0,229,192,0.9), rgba(0,229,192,0.62));
-        box-shadow: 0 0 12px rgba(0,229,192,0.5);
+        color: var(--shade-nom-o); border-color: var(--color-nom-o);
+        background: var(--fill-nom-o);
+        box-shadow: 0 0 12px var(--glow-nom-o);
       }
       .hour.mode-nom_o .hour-tag, .hour.mode-nom_o .hour-power { opacity: 1; }
       .hour.mode-charge {
-        color: #eaf6ff; border-color: rgba(63,182,255,0.55);
-        background: rgba(63,182,255,0.18); box-shadow: 0 0 8px rgba(63,182,255,0.22);
+        color: var(--tint-charge); border-color: var(--border-charge);
+        background: var(--fill-charge); box-shadow: 0 0 8px var(--glow-charge);
       }
       .hour.mode-discharge {
-        color: #fff3e0; border-color: rgba(255,152,0,0.55);
-        background: rgba(255,152,0,0.18); box-shadow: 0 0 8px rgba(255,152,0,0.22);
+        color: var(--tint-discharge); border-color: var(--border-discharge);
+        background: var(--fill-discharge); box-shadow: 0 0 8px var(--glow-discharge);
       }
       .hour.current { outline: 1px solid rgba(234,246,255,0.85); }
       .hour.selected { outline: 1px solid rgba(63,182,255,1); }
