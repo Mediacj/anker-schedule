@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.10";
+const CARD_VERSION = "1.0.11";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -39,6 +39,7 @@ const DEFAULTS = {
   discharge_soc_entity: "",
   nom_switch_entity: "switch.anker_nom",
   nom_o_label: "NOM-O",
+  nom_o_tag: "N-O",
   show_soc: false,
   default_charge_soc: 100,
   default_discharge_soc: 10,
@@ -294,6 +295,13 @@ class AnkerScheduleCard extends HTMLElement {
   _modeLabel(mode) {
     if (mode === "nom_o") return this._nomOLabel();
     return MODE_LABEL[mode] || mode;
+  }
+
+  /** Korte tekst op de uurtegel; de tegel is smal, dus max 3 tekens. */
+  _nomOTag() {
+    const raw = this._config?.nom_o_tag;
+    const tag = typeof raw === "string" ? raw.trim().slice(0, 3) : "";
+    return tag || DEFAULTS.nom_o_tag;
   }
 
   _defaultSlot() {
@@ -810,11 +818,10 @@ class AnkerScheduleCard extends HTMLElement {
     );
     btn.classList.add(`mode-${slot.mode}`);
     btn.classList.toggle("selected", this._selectedHour === h);
-    const custom = this._nomOLabel();
     const tags = {
       off: "—",
       nom: "NOM",
-      nom_o: custom === MODE_LABEL.nom_o ? "N-O" : custom,
+      nom_o: this._nomOTag(),
       charge: "IN",
       discharge: "UIT",
     };
@@ -1546,6 +1553,10 @@ class AnkerScheduleEditor extends HTMLElement {
             <label>Tekst NOM-O-knop (nom_o_label)</label>
             <input type="text" data-key="nom_o_label" placeholder="NOM-O">
           </div>
+          <div class="row">
+            <label>Tekst NOM-O-uurtegel (nom_o_tag, max 3 tekens)</label>
+            <input type="text" data-key="nom_o_tag" placeholder="N-O" maxlength="3">
+          </div>
           <label class="check-row">
             <input type="checkbox" data-key="enabled">
             Planner standaard aan (enabled)
@@ -1660,6 +1671,7 @@ class AnkerScheduleEditor extends HTMLElement {
       const textKeys = [
         "title",
         "nom_o_label",
+        "nom_o_tag",
         "nom_option",
         "third_party_option",
         "charge_option",
@@ -1767,6 +1779,7 @@ class AnkerScheduleEditor extends HTMLElement {
     const syncText = [
       "title",
       "nom_o_label",
+      "nom_o_tag",
       "nom_option",
       "third_party_option",
       "charge_option",

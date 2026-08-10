@@ -61,6 +61,7 @@ Volledig voorbeeld (alle overrides optioneel):
 type: custom:anker-schedule
 title: ANKER PLANNER
 nom_o_label: NOM-O
+nom_o_tag: N-O
 enabled: true
 auto_apply: false
 entity: select.anker_solix_device_bedrijfsmodus_apparaat_werkt_in_externe_modus
@@ -98,7 +99,8 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | Veld | Type | Standaard | Beschrijving |
 |------|------|-----------|--------------|
 | `title` | string | `ANKER PLANNER` | Titel bovenaan de card |
-| `nom_o_label` | string | `NOM-O` | Eigen tekst voor de NOM-O-knop; wordt ook in de legenda, statusblokken en uurtegels gebruikt |
+| `nom_o_label` | string | `NOM-O` | Eigen tekst voor de NOM-O-knop; wordt ook in de legenda en de statusblokken gebruikt |
+| `nom_o_tag` | string | `N-O` | Eigen tekst op de NOM-O-uurtegels; maximaal 3 tekens, langer wordt afgekapt |
 | `enabled` | bool | `true` | Startwaarde planner aan/uit |
 | `auto_apply` | bool | `false`* | Client-side toepassen; bij integratie-storage normaal niet nodig |
 | `entity` | entity_id | *(uit integratie)* | Bedrijfsmodus-select |
