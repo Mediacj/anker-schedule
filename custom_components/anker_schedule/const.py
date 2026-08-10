@@ -7,6 +7,8 @@ CONF_NAME = "name"
 CONF_MODE_ENTITY = "mode_entity"
 CONF_DIRECTION_ENTITY = "direction_entity"
 CONF_POWER_ENTITY = "power_entity"
+CONF_CHARGE_SOC_ENTITY = "charge_soc_entity"
+CONF_DISCHARGE_SOC_ENTITY = "discharge_soc_entity"
 CONF_NOM_SWITCH_ENTITY = "nom_switch_entity"
 CONF_NOM_OPTION = "nom_option"
 CONF_THIRD_PARTY_OPTION = "third_party_option"
@@ -17,6 +19,8 @@ CONF_DEFAULT_POWER = "default_power"
 CONF_MAX_POWER = "max_power"
 CONF_MIN_POWER = "min_power"
 CONF_POWER_STEP = "power_step"
+CONF_DEFAULT_CHARGE_SOC = "default_charge_soc"
+CONF_DEFAULT_DISCHARGE_SOC = "default_discharge_soc"
 
 DEFAULT_NAME = "Anker Schedule"
 DEFAULT_NOM_OPTION = "0"
@@ -29,6 +33,8 @@ DEFAULT_DEFAULT_POWER = 500
 DEFAULT_MAX_POWER = 3500
 DEFAULT_MIN_POWER = 0
 DEFAULT_POWER_STEP = 50
+DEFAULT_CHARGE_SOC = 100
+DEFAULT_DISCHARGE_SOC = 10
 DEFAULT_MODE_SETTLE_SECONDS = 2.0
 
 MODE_OFF = "off"

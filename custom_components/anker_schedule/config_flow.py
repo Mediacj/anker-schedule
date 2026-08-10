@@ -12,9 +12,13 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_CHARGE_OPTION,
+    CONF_CHARGE_SOC_ENTITY,
+    CONF_DEFAULT_CHARGE_SOC,
+    CONF_DEFAULT_DISCHARGE_SOC,
     CONF_DEFAULT_POWER,
     CONF_DIRECTION_ENTITY,
     CONF_DISCHARGE_OPTION,
+    CONF_DISCHARGE_SOC_ENTITY,
     CONF_MAX_POWER,
     CONF_MIN_POWER,
     CONF_MODE_ENTITY,
@@ -25,8 +29,10 @@ from .const import (
     CONF_POWER_STEP,
     CONF_THIRD_PARTY_OPTION,
     DEFAULT_CHARGE_OPTION,
+    DEFAULT_CHARGE_SOC,
     DEFAULT_DEFAULT_POWER,
     DEFAULT_DISCHARGE_OPTION,
+    DEFAULT_DISCHARGE_SOC,
     DEFAULT_MAX_POWER,
     DEFAULT_MIN_POWER,
     DEFAULT_NAME,
@@ -71,6 +77,8 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     fields.update(_entity_field(CONF_MODE_ENTITY, "select", d))
     fields.update(_entity_field(CONF_DIRECTION_ENTITY, "select", d))
     fields.update(_entity_field(CONF_POWER_ENTITY, "number", d))
+    fields.update(_optional_entity_field(CONF_CHARGE_SOC_ENTITY, "number", d))
+    fields.update(_optional_entity_field(CONF_DISCHARGE_SOC_ENTITY, "number", d))
     fields.update(
         _optional_entity_field(
             CONF_NOM_SWITCH_ENTITY, "switch", d, DEFAULT_NOM_SWITCH
@@ -112,6 +120,16 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_POWER_STEP,
                 default=d.get(CONF_POWER_STEP, DEFAULT_POWER_STEP),
             ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
+            vol.Optional(
+                CONF_DEFAULT_CHARGE_SOC,
+                default=d.get(CONF_DEFAULT_CHARGE_SOC, DEFAULT_CHARGE_SOC),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+            vol.Optional(
+                CONF_DEFAULT_DISCHARGE_SOC,
+                default=d.get(
+                    CONF_DEFAULT_DISCHARGE_SOC, DEFAULT_DISCHARGE_SOC
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
         }
     )
     return vol.Schema(fields)

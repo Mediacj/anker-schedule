@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.8";
+const CARD_VERSION = "1.0.9";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -35,7 +35,12 @@ const DEFAULTS = {
   entity: "",
   direction_entity: "",
   power_entity: "",
+  charge_soc_entity: "",
+  discharge_soc_entity: "",
   nom_switch_entity: "switch.anker_nom",
+  show_soc: false,
+  default_charge_soc: 100,
+  default_discharge_soc: 10,
   nom_option: "0",
   third_party_option: "3",
   charge_option: "0",
@@ -197,6 +202,8 @@ class AnkerScheduleCard extends HTMLElement {
       ["entity", "mode_entity"],
       ["direction_entity", "direction_entity"],
       ["power_entity", "power_entity"],
+      ["charge_soc_entity", "charge_soc_entity"],
+      ["discharge_soc_entity", "discharge_soc_entity"],
       ["nom_switch_entity", "nom_switch_entity"],
     ].forEach(([key, attrKey]) => {
       if (!this._config[key] && attrs[attrKey]) {
@@ -246,26 +253,68 @@ class AnkerScheduleCard extends HTMLElement {
     return this._configuredPower("default_power", 500);
   }
 
+  _defaultChargeSoc() {
+    return Math.max(
+      0,
+      Math.min(100, this._configuredPower("default_charge_soc", 100))
+    );
+  }
+
+  _defaultDischargeSoc() {
+    return Math.max(
+      0,
+      Math.min(100, this._configuredPower("default_discharge_soc", 10))
+    );
+  }
+
+  _defaultSocForMode(mode) {
+    if (mode === "charge") return this._defaultChargeSoc();
+    if (mode === "discharge") return this._defaultDischargeSoc();
+    return 0;
+  }
+
+  _clampSoc(value, fallback = 0) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  _showSoc() {
+    return !!this._config?.show_soc;
+  }
+
   _defaultSlot() {
     return {
       mode: "off",
       power: this._defaultPower(),
+      soc: this._defaultSocForMode("off"),
     };
   }
 
   _normalizeSlot(value) {
     const base = this._defaultSlot();
-    if (value === true) return { mode: "nom", power: base.power };
+    if (value === true) {
+      return { mode: "nom", power: base.power, soc: this._defaultSocForMode("nom") };
+    }
     if (value === false || value == null) return { ...base };
     if (typeof value === "string" && MODES.includes(value)) {
-      return { mode: value, power: base.power };
+      return {
+        mode: value,
+        power: base.power,
+        soc: this._defaultSocForMode(value),
+      };
     }
     if (typeof value === "object") {
       const mode = MODES.includes(value.mode) ? value.mode : "off";
       const power = Number(value.power);
+      const fallbackSoc = this._defaultSocForMode(mode);
       return {
         mode,
         power: Number.isFinite(power) && power >= 0 ? power : base.power,
+        soc:
+          value.soc === undefined || value.soc === null
+            ? fallbackSoc
+            : this._clampSoc(value.soc, fallbackSoc),
       };
     }
     return { ...base };
@@ -314,13 +363,18 @@ class AnkerScheduleCard extends HTMLElement {
     this._queueStorageWrite();
   }
 
-  /** Compact format so it fits in text/input_text (255): e=1;m=oonxc...;p=0,0,500,... */
+  /** Compact format: e=1;m=oonxc...;p=0,0,500,...;s=10,100,... */
   _serializeCompact() {
     const m = this._schedule
       .map((s) => MODE_TO_CHAR[s.mode] || "o")
       .join("");
     const p = this._schedule.map((s) => Math.round(s.power || 0)).join(",");
-    return `e=${this._enabled ? 1 : 0};m=${m};p=${p}`;
+    const s = this._schedule
+      .map((slot) =>
+        this._clampSoc(slot.soc, this._defaultSocForMode(slot.mode))
+      )
+      .join(",");
+    return `e=${this._enabled ? 1 : 0};m=${m};p=${p};s=${s}`;
   }
 
   _parseCompact(raw) {
@@ -348,14 +402,22 @@ class AnkerScheduleCard extends HTMLElement {
     const powers = (parts.p || "")
       .split(",")
       .map((n) => parseInt(n, 10));
+    const socs = (parts.s || "")
+      .split(",")
+      .map((n) => parseInt(n, 10));
     const hours = [];
     for (let i = 0; i < 24; i++) {
+      const mode = CHAR_TO_MODE[parts.m[i]] || "off";
+      const fallbackSoc = this._defaultSocForMode(mode);
       hours.push({
-        mode: CHAR_TO_MODE[parts.m[i]] || "off",
+        mode,
         power:
           Number.isFinite(powers[i]) && powers[i] >= 0
             ? powers[i]
             : this._defaultPower(),
+        soc: Number.isFinite(socs[i])
+          ? this._clampSoc(socs[i], fallbackSoc)
+          : fallbackSoc,
       });
     }
     return {
@@ -484,6 +546,14 @@ class AnkerScheduleCard extends HTMLElement {
     return this._config.nom_switch_entity || "switch.anker_nom";
   }
 
+  _chargeSocEntity() {
+    return this._config.charge_soc_entity || "";
+  }
+
+  _dischargeSocEntity() {
+    return this._config.discharge_soc_entity || "";
+  }
+
   _buildDom() {
     const style = document.createElement("style");
     style.textContent = this._css();
@@ -543,6 +613,13 @@ class AnkerScheduleCard extends HTMLElement {
               </div>
               <input class="power-slider" type="range" min="0" max="3500" step="50" value="500">
             </div>
+            <div class="soc-wrap hidden">
+              <div class="power-labels">
+                <span class="soc-label">SOC</span>
+                <span class="soc-value">100 %</span>
+              </div>
+              <input class="soc-slider" type="range" min="0" max="100" step="1" value="100">
+            </div>
           </div>
 
           <div class="legend">
@@ -584,6 +661,10 @@ class AnkerScheduleCard extends HTMLElement {
       powerWrap: card.querySelector(".power-wrap"),
       powerSlider: card.querySelector(".power-slider"),
       powerValue: card.querySelector(".power-value"),
+      socWrap: card.querySelector(".soc-wrap"),
+      socSlider: card.querySelector(".soc-slider"),
+      socLabel: card.querySelector(".soc-label"),
+      socValue: card.querySelector(".soc-value"),
       applyBtn: card.querySelector(".apply-now-btn"),
     };
 
@@ -616,6 +697,24 @@ class AnkerScheduleCard extends HTMLElement {
       if (this._selectedHour === now) this._maybeApplySchedule(true);
     });
 
+    this._els.socSlider.addEventListener("input", () => {
+      if (this._selectedHour == null) return;
+      const mode = this._schedule[this._selectedHour].mode;
+      const soc = this._clampSoc(
+        this._els.socSlider.value,
+        this._defaultSocForMode(mode)
+      );
+      this._schedule[this._selectedHour].soc = soc;
+      this._els.socSlider.value = String(soc);
+      this._els.socValue.textContent = `${soc} %`;
+      this._persist();
+    });
+    this._els.socSlider.addEventListener("change", () => {
+      if (this._selectedHour == null) return;
+      const now = new Date().getHours();
+      if (this._selectedHour === now) this._maybeApplySchedule(true);
+    });
+
     card.querySelectorAll("[data-action]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const action = btn.getAttribute("data-action");
@@ -624,6 +723,7 @@ class AnkerScheduleCard extends HTMLElement {
           this._schedule = Array.from({ length: 24 }, () => ({
             mode: "nom",
             power,
+            soc: this._defaultSocForMode("nom"),
           }));
           this._afterScheduleEdit();
         } else if (action === "all-off") {
@@ -725,7 +825,13 @@ class AnkerScheduleCard extends HTMLElement {
         : Number.isFinite(Number(prev.power))
           ? Number(prev.power)
           : this._defaultPower();
-    this._schedule[hour] = { mode, power: keepPower };
+    const sameFamily =
+      (prev.mode === "charge" && mode === "charge") ||
+      (prev.mode === "discharge" && mode === "discharge");
+    const soc = sameFamily
+      ? this._clampSoc(prev.soc, this._defaultSocForMode(mode))
+      : this._defaultSocForMode(mode);
+    this._schedule[hour] = { mode, power: keepPower, soc };
     if (select) {
       this._selectedHour = hour;
     }
@@ -760,6 +866,22 @@ class AnkerScheduleCard extends HTMLElement {
       this._schedule[h].power = power;
       this._els.powerSlider.value = String(power);
       this._els.powerValue.textContent = `${Math.round(power)} W`;
+    }
+
+    const showSoc = needsPower && this._showSoc();
+    this._els.socWrap?.classList.toggle("hidden", !showSoc);
+    if (showSoc) {
+      const fallback = this._defaultSocForMode(slot.mode);
+      const soc = this._clampSoc(slot.soc, fallback);
+      this._schedule[h].soc = soc;
+      this._els.socSlider.value = String(soc);
+      this._els.socValue.textContent = `${soc} %`;
+      this._els.socLabel.textContent =
+        slot.mode === "discharge" ? "Min SOC" : "Max SOC";
+      this._els.socSlider.style.accentColor =
+        slot.mode === "discharge"
+          ? this._config.colors.discharge
+          : this._config.colors.charge;
     }
   }
 
@@ -899,6 +1021,18 @@ class AnkerScheduleCard extends HTMLElement {
     });
   }
 
+  async _setNumber(entityId, value) {
+    if (!entityId || !this._hass?.states?.[entityId]) return;
+    const current = parseFloat(this._hass.states[entityId].state);
+    if (Number.isFinite(current) && Math.round(current) === Math.round(value)) {
+      return;
+    }
+    await this._hass.callService("number", "set_value", {
+      entity_id: entityId,
+      value: Math.round(value),
+    });
+  }
+
   async _setNomSwitch(on) {
     const entityId = this._nomSwitchEntity();
     if (!entityId || !this._hass?.states?.[entityId]) return;
@@ -1012,7 +1146,8 @@ class AnkerScheduleCard extends HTMLElement {
       return ok("Planner staat uit — NOM-switch uit");
     }
 
-    const key = `${hour}:${slot.mode}:${Math.round(slot.power || 0)}`;
+    const soc = this._clampSoc(slot.soc, this._defaultSocForMode(slot.mode));
+    const key = `${hour}:${slot.mode}:${Math.round(slot.power || 0)}:${soc}`;
     if (!force && this._lastAppliedKey === key) {
       return ok(`Al actief: ${summary}`);
     }
@@ -1056,6 +1191,12 @@ class AnkerScheduleCard extends HTMLElement {
           : this._config.discharge_option || "1"
       );
       await this._setPower(slot.power);
+      await this._setNumber(
+        slot.mode === "charge"
+          ? this._chargeSocEntity()
+          : this._dischargeSocEntity(),
+        soc
+      );
       this._lastAppliedKey = key;
       return ok(`${summary} toegepast`);
     } catch (err) {
@@ -1219,7 +1360,7 @@ class AnkerScheduleCard extends HTMLElement {
         border-radius: 10px; background: rgba(255,255,255,0.04);
         border: 1px solid rgba(63,182,255,0.18);
       }
-      .editor-panel.hidden, .power-wrap.hidden, .hidden { display: none; }
+      .editor-panel.hidden, .power-wrap.hidden, .soc-wrap.hidden, .hidden { display: none; }
       .editor-head {
         display: flex; justify-content: space-between; align-items: center;
         margin-bottom: 8px; color: #d8e6ee; font-size: 12px;
@@ -1232,9 +1373,12 @@ class AnkerScheduleCard extends HTMLElement {
         display: flex; justify-content: space-between;
         color: #9fc4d6; font-size: 12px; margin-bottom: 6px;
       }
-      .power-value { color: #eaf6ff; font-variant-numeric: tabular-nums; }
-      .power-slider {
+      .power-wrap, .soc-wrap { width: 100%; }
+      .soc-wrap { margin-top: 10px; }
+      .power-value, .soc-value { color: #eaf6ff; font-variant-numeric: tabular-nums; }
+      .power-slider, .soc-slider {
         width: 100%; accent-color: var(--color-charge); cursor: pointer;
+        display: block; margin: 0; box-sizing: border-box;
       }
       .legend {
         display: flex; flex-wrap: wrap; gap: 12px;
@@ -1383,6 +1527,10 @@ class AnkerScheduleEditor extends HTMLElement {
             <input type="checkbox" data-key="auto_apply">
             Client-side auto_apply (normaal uit laten bij integratie)
           </label>
+          <label class="check-row">
+            <input type="checkbox" data-key="show_soc">
+            SOC weergeven
+          </label>
 
           <div class="section-title">Entities (optioneel, leeg = uit integratie)</div>
           <div class="row">
@@ -1396,6 +1544,14 @@ class AnkerScheduleEditor extends HTMLElement {
           <div class="row">
             <label>Vermogen (power_entity)</label>
             <ha-entity-picker data-key="power_entity" domain="number" allow-custom-entity></ha-entity-picker>
+          </div>
+          <div class="row">
+            <label>Max SOC laden (charge_soc_entity)</label>
+            <ha-entity-picker data-key="charge_soc_entity" domain="number" allow-custom-entity></ha-entity-picker>
+          </div>
+          <div class="row">
+            <label>Min SOC ontladen (discharge_soc_entity)</label>
+            <ha-entity-picker data-key="discharge_soc_entity" domain="number" allow-custom-entity></ha-entity-picker>
           </div>
           <div class="row">
             <label>NOM-O switch (nom_switch_entity)</label>
@@ -1418,6 +1574,10 @@ class AnkerScheduleEditor extends HTMLElement {
           <div class="row"><label>Max (max_power)</label><input type="number" data-key="max_power" min="0" step="50"></div>
           <div class="row"><label>Min (min_power)</label><input type="number" data-key="min_power" min="0" step="50"></div>
           <div class="row"><label>Stap (power_step)</label><input type="number" data-key="power_step" min="1" step="1"></div>
+
+          <div class="section-title">SOC</div>
+          <div class="row"><label>Standaard max SOC laden (default_charge_soc)</label><input type="number" data-key="default_charge_soc" min="0" max="100" step="1"></div>
+          <div class="row"><label>Standaard min SOC ontladen (default_discharge_soc)</label><input type="number" data-key="default_discharge_soc" min="0" max="100" step="1"></div>
 
           <div class="section-title">Kleuren</div>
           <div class="row">
@@ -1494,6 +1654,8 @@ class AnkerScheduleEditor extends HTMLElement {
         max_power: 3500,
         min_power: 0,
         power_step: 50,
+        default_charge_soc: 100,
+        default_discharge_soc: 10,
       };
       Object.keys(numberKeys).forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
@@ -1512,7 +1674,7 @@ class AnkerScheduleEditor extends HTMLElement {
         });
       });
 
-      ["enabled", "auto_apply"].forEach((key) => {
+      ["enabled", "auto_apply", "show_soc"].forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
         if (!input) return;
         input.addEventListener("change", () => {
@@ -1589,17 +1751,26 @@ class AnkerScheduleEditor extends HTMLElement {
       if (input.value !== String(val)) input.value = val;
     });
 
-    ["default_power", "max_power", "min_power", "power_step"].forEach((key) => {
+    [
+      "default_power",
+      "max_power",
+      "min_power",
+      "power_step",
+      "default_charge_soc",
+      "default_discharge_soc",
+    ].forEach((key) => {
       const input = this.querySelector(`input[data-key="${key}"]`);
       if (!input || this._isFocused(input)) return;
       const val = this._config[key];
       if (input.value !== String(val)) input.value = val;
     });
 
-    ["enabled", "auto_apply"].forEach((key) => {
+    ["enabled", "auto_apply", "show_soc"].forEach((key) => {
       const input = this.querySelector(`input[data-key="${key}"]`);
       if (!input) return;
-      const checked = key === "auto_apply" ? !!this._raw.auto_apply : !!this._config.enabled;
+      let checked = !!this._config.enabled;
+      if (key === "auto_apply") checked = !!this._raw.auto_apply;
+      if (key === "show_soc") checked = !!this._config.show_soc;
       if (input.checked !== checked) input.checked = checked;
     });
 

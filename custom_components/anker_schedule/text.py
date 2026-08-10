@@ -11,7 +11,9 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CONF_CHARGE_SOC_ENTITY,
     CONF_DIRECTION_ENTITY,
+    CONF_DISCHARGE_SOC_ENTITY,
     CONF_MODE_ENTITY,
     CONF_NAME,
     CONF_NOM_SWITCH_ENTITY,
@@ -71,6 +73,8 @@ class AnkerScheduleText(TextEntity):
             "mode_entity": data.get(CONF_MODE_ENTITY),
             "direction_entity": data.get(CONF_DIRECTION_ENTITY),
             "power_entity": data.get(CONF_POWER_ENTITY),
+            "charge_soc_entity": data.get(CONF_CHARGE_SOC_ENTITY),
+            "discharge_soc_entity": data.get(CONF_DISCHARGE_SOC_ENTITY),
             "nom_switch_entity": data.get(CONF_NOM_SWITCH_ENTITY),
         }
 

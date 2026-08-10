@@ -9,6 +9,8 @@
           "mode_entity": "Bedrijfsmodus select",
           "direction_entity": "Laad/ontlaadregeling select",
           "power_entity": "Vermogen number",
+          "charge_soc_entity": "Max SOC laden (number)",
+          "discharge_soc_entity": "Min SOC ontladen (number)",
           "nom_switch_entity": "NOM-O switch",
           "nom_option": "NOM-optie (self_consumption)",
           "third_party_option": "Externe modus-optie (third_party_control)",
@@ -17,7 +19,9 @@
           "default_power": "Standaard vermogen (W)",
           "max_power": "Max vermogen (W)",
           "min_power": "Min vermogen (W)",
-          "power_step": "Vermogensstap (W)"
+          "power_step": "Vermogensstap (W)",
+          "default_charge_soc": "Standaard max SOC laden (%)",
+          "default_discharge_soc": "Standaard min SOC ontladen (%)"
         }
       }
     },
@@ -35,6 +39,8 @@
           "mode_entity": "Bedrijfsmodus select",
           "direction_entity": "Laad/ontlaadregeling select",
           "power_entity": "Vermogen number",
+          "charge_soc_entity": "Max SOC laden (number)",
+          "discharge_soc_entity": "Min SOC ontladen (number)",
           "nom_switch_entity": "NOM-O switch",
           "nom_option": "NOM-optie (self_consumption)",
           "third_party_option": "Externe modus-optie (third_party_control)",
@@ -43,7 +49,9 @@
           "default_power": "Standaard vermogen (W)",
           "max_power": "Max vermogen (W)",
           "min_power": "Min vermogen (W)",
-          "power_step": "Vermogensstap (W)"
+          "power_step": "Vermogensstap (W)",
+          "default_charge_soc": "Standaard max SOC laden (%)",
+          "default_discharge_soc": "Standaard min SOC ontladen (%)"
         }
       }
     }

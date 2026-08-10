@@ -31,6 +31,8 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / NOM-O / 
    - Bedrijfsmodus select
    - Laad/ontlaadregeling select
    - Vermogen number
+   - Max SOC laden (optioneel, bijv. `number.*_maximale_laadlimiet`)
+   - Min SOC ontladen (optioneel, bijv. `number.*_ontladingslimiet`)
    - NOM-O switch (standaard `switch.anker_nom`)
 
 De card wordt automatisch geladen via `/anker_schedule/anker-schedule.js`.
@@ -63,6 +65,8 @@ auto_apply: false
 entity: select.anker_solix_device_bedrijfsmodus_apparaat_werkt_in_externe_modus
 direction_entity: select.anker_solix_device_laad_ontlaadregeling
 power_entity: number.anker_solix_device_ingestelde_laad_ontlaadvermogen
+charge_soc_entity: number.garage_anker_solix_device_192_168_1_41_maximale_laadlimiet
+discharge_soc_entity: number.garage_anker_solix_device_192_168_1_41_ontladingslimiet
 nom_switch_entity: switch.anker_nom
 storage_entity: text.anker_schedule_schema
 nom_option: "0"
@@ -74,6 +78,9 @@ default_power: 500
 max_power: 3500
 min_power: 0
 power_step: 50
+show_soc: true
+default_charge_soc: 100
+default_discharge_soc: 10
 colors:
   nom: "#1b8a3a"
   nom_o: "#00e5c0"
@@ -95,6 +102,8 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | `entity` | entity_id | *(uit integratie)* | Bedrijfsmodus-select |
 | `direction_entity` | entity_id | *(uit integratie)* | Laad/ontlaadregeling |
 | `power_entity` | entity_id | *(uit integratie)* | Vermogen number |
+| `charge_soc_entity` | entity_id | *(uit integratie)* | Number voor max SOC bij laden |
+| `discharge_soc_entity` | entity_id | *(uit integratie)* | Number voor min SOC bij ontladen |
 | `nom_switch_entity` | entity_id | `switch.anker_nom` | NOM-O switch |
 | `storage_entity` | entity_id | *(auto)* | Text/input_text met compact schema |
 | `nom_option` | string | `0` | Option voor NOM / self_consumption |
@@ -106,6 +115,9 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | `max_power` | number | `3500` | Maximum van de vermogensslider |
 | `min_power` | number | `0` | Minimum van de vermogensslider |
 | `power_step` | number | `50` | Stapgrootte slider (W) |
+| `show_soc` | bool | `false` | SOC weergeven: extra slider onder het vermogen bij laden/ontladen |
+| `default_charge_soc` | number | `100` | Standaard max SOC (%) voor een nieuw laad-uur |
+| `default_discharge_soc` | number | `10` | Standaard min SOC (%) voor een nieuw ontlaad-uur |
 | `colors.nom` | hex | `#1b8a3a` | Kleur NOM |
 | `colors.nom_o` | hex | `#00e5c0` | Kleur NOM-O |
 | `colors.charge` | hex | `#3fb6ff` | Kleur laden |
@@ -120,7 +132,7 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 
 | Entity | Functie |
 |--------|---------|
-| `text.*_schema` | Compact schema `e=1;m=...;p=...` |
+| `text.*_schema` | Compact schema `e=1;m=...;p=...;s=...` |
 | `switch.*_planner` | Planner aan/uit |
 | `sensor.*_geplande_modus` | Modus huidig uur |
 | `sensor.*_gepland_vermogen` | Vermogen huidig uur |
@@ -135,9 +147,18 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 
 - **NOM** → bedrijfsmodus = `self_consumption`/`0` + NOM-switch UIT
 - **NOM-O** → alleen `switch.anker_nom` AAN (geen select, geen vermogen)
-- **Laden** → externe modus (`3`), **2s wachten**, daarna charge + vermogen
-- **Ontladen** → externe modus (`3`), **2s wachten**, daarna discharge + vermogen
+- **Laden** → externe modus (`3`), **2s wachten**, daarna charge + vermogen + max SOC
+- **Ontladen** → externe modus (`3`), **2s wachten**, daarna discharge + vermogen + min SOC
 - **Uit / leeg** → vermogen op **0 W** + NOM-switch UIT (tenzij `off_option` gezet)
 - **Na laden/ontladen → NOM of NOM-O** → geen vermogen-reset aan het einde van het uur
 
 Toepassen gebeurt bij HA-start, elk heel uur, en bij schema-wijzigingen voor het huidige uur.
+
+## SOC per uur
+
+Zet `show_soc: true` in de card-YAML (of vink **SOC weergeven** aan in de card-editor). Selecteer je een uur met **Laden** of **Ontladen**, dan verschijnt onder de vermogensslider een tweede slider in hetzelfde kader:
+
+- **Laden** → *Max SOC*: tot welk laadniveau dat uur geladen wordt (standaard 100%), geschreven naar `charge_soc_entity`.
+- **Ontladen** → *Min SOC*: tot welk niveau dat uur ontladen mag worden (standaard 10%), geschreven naar `discharge_soc_entity`.
+
+De waarde staat per uur in het schema, dus elk laad- of ontlaadblok kan een eigen SOC-grens hebben. Staat `show_soc` uit, dan gebruikt elk uur gewoon de standaardwaarde. Is er geen SOC-entity geconfigureerd, dan wordt er niets geschreven.

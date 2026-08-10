@@ -1,7 +1,7 @@
 {
   "domain": "anker_schedule",
   "name": "Anker Schedule",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "documentation": "https://github.com/Mediacj/anker-schedule",
   "codeowners": [
     "@Mediacj"
