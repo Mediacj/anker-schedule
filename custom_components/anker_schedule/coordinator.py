@@ -9,7 +9,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.event import async_call_later, async_track_time_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -77,6 +77,8 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_hourly = None
         self._last_applied_key: str | None = None
         self._schedule_entity_id: str | None = None
+        self._apply_lock = asyncio.Lock()
+        self._unsub_verify = None
         self.data = self._fresh_data()
 
     def _cfg(self, key: str, default: Any) -> Any:
@@ -173,6 +175,9 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self.async_apply_schedule(force=True)
 
     async def async_shutdown(self) -> None:
+        if self._unsub_verify is not None:
+            self._unsub_verify()
+            self._unsub_verify = None
         if self._unsub_hourly is not None:
             self._unsub_hourly()
             self._unsub_hourly = None
@@ -238,8 +243,9 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "current_soc": int(slot.get("soc", 0)),
             "current_hour": hour,
         }
-        if dt_util.now().minute == 0:
-            await self.async_apply_schedule(force=False)
+        # Elke minuut: niet alleen toepassen bij uurwisseling, maar ook
+        # herstellen als een andere bron de modus tussentijds overschrijft.
+        await self.async_apply_schedule(force=False)
         return self.data
 
     def _resolve_option(self, entity_id: str, wanted: str) -> str | None:
@@ -350,8 +356,123 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         prev = self.data["hours"][(hour - 1) % 24]
         return prev["mode"] in (MODE_CHARGE, MODE_DISCHARGE)
 
+    def _select_value(self, entity_id: str) -> str | None:
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return None
+        return str(state.state)
+
+    def _nom_switch_is_on(self) -> bool | None:
+        entity_id = str(
+            self._cfg(CONF_NOM_SWITCH_ENTITY, DEFAULT_NOM_SWITCH) or ""
+        )
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return None
+        return state.state == "on"
+
+    def _slot_matches_live(
+        self,
+        *,
+        mode: str,
+        mode_entity: str,
+        direction: str,
+        power_entity: str,
+        power: int,
+        soc: int,
+        charge_soc_entity: str,
+        discharge_soc_entity: str,
+    ) -> bool:
+        """True when live Anker entities still match the planned slot."""
+        if mode == MODE_OFF:
+            # Uit-uur: geen minutelijk herstel van de bedrijfsmodus.
+            return True
+
+        if mode == MODE_NOM_O:
+            # NOM-O: alleen de switch; bedrijfsmodus laten we met rust.
+            switch_on = self._nom_switch_is_on()
+            return switch_on is True if switch_on is not None else True
+
+        if mode == MODE_NOM:
+            wanted = self._resolve_option(
+                mode_entity,
+                str(self._cfg(CONF_NOM_OPTION, DEFAULT_NOM_OPTION)),
+            )
+            if wanted is None:
+                return True
+            live = self._select_value(mode_entity)
+            switch_on = self._nom_switch_is_on()
+            if live != wanted:
+                return False
+            if switch_on is True:
+                return False
+            return True
+
+        if mode not in (MODE_CHARGE, MODE_DISCHARGE):
+            return True
+
+        mode_wanted = self._resolve_option(
+            mode_entity,
+            str(self._cfg(CONF_THIRD_PARTY_OPTION, DEFAULT_THIRD_PARTY_OPTION)),
+        )
+        dir_wanted = self._resolve_option(
+            direction,
+            str(
+                self._cfg(CONF_CHARGE_OPTION, DEFAULT_CHARGE_OPTION)
+                if mode == MODE_CHARGE
+                else self._cfg(CONF_DISCHARGE_OPTION, DEFAULT_DISCHARGE_OPTION)
+            ),
+        )
+        if mode_wanted is None or self._select_value(mode_entity) != mode_wanted:
+            return False
+        if dir_wanted is None or self._select_value(direction) != dir_wanted:
+            return False
+
+        if power_entity:
+            state = self.hass.states.get(power_entity)
+            if state is not None:
+                try:
+                    if round(float(state.state)) != int(power):
+                        return False
+                except (TypeError, ValueError):
+                    return False
+
+        soc_entity = (
+            charge_soc_entity if mode == MODE_CHARGE else discharge_soc_entity
+        )
+        if soc_entity:
+            state = self.hass.states.get(soc_entity)
+            if state is not None:
+                try:
+                    if round(float(state.state)) != int(soc):
+                        return False
+                except (TypeError, ValueError):
+                    return False
+        return True
+
+    def _schedule_verify_after_settle(self) -> None:
+        """Na NOM opnieuw controleren: Anker/andere bron zet soms ~2s later third_party."""
+        if self._unsub_verify is not None:
+            self._unsub_verify()
+            self._unsub_verify = None
+
+        @callback
+        def _run(_: datetime) -> None:
+            self._unsub_verify = None
+            self.hass.async_create_task(self.async_apply_schedule(force=False))
+
+        self._unsub_verify = async_call_later(
+            self.hass, DEFAULT_MODE_SETTLE_SECONDS + 1.0, _run
+        )
+
     async def async_apply_schedule(self, *, force: bool = False) -> None:
         """Apply the slot for the current hour to Anker entities."""
+        async with self._apply_lock:
+            await self._async_apply_schedule_locked(force=force)
+
+    async def _async_apply_schedule_locked(self, *, force: bool = False) -> None:
         hour = dt_util.now().hour
         slot = self.data["hours"][hour]
         enabled = bool(self.data["enabled"])
@@ -384,10 +505,6 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.exception("Anker NOM-switch uitzetten mislukt")
             return
 
-        key = f"{hour}:{slot['mode']}:{int(slot['power'])}:{soc}"
-        if not force and self._last_applied_key == key:
-            return
-
         mode_entity = str(self._cfg(CONF_MODE_ENTITY, ""))
         direction = str(self._cfg(CONF_DIRECTION_ENTITY, ""))
         power_entity = str(self._cfg(CONF_POWER_ENTITY, ""))
@@ -397,8 +514,33 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.error("Geen mode_entity geconfigureerd")
             return
 
+        mode = slot["mode"]
+        power = int(slot["power"])
+        key = f"{hour}:{mode}:{power}:{soc}"
+        matches_live = self._slot_matches_live(
+            mode=mode,
+            mode_entity=mode_entity,
+            direction=direction,
+            power_entity=power_entity,
+            power=power,
+            soc=soc,
+            charge_soc_entity=charge_soc_entity,
+            discharge_soc_entity=discharge_soc_entity,
+        )
+        if (
+            not force
+            and self._last_applied_key == key
+            and matches_live
+        ):
+            return
+
+        if not matches_live and self._last_applied_key == key:
+            _LOGGER.warning(
+                "Anker Schedule: live-modus wijkt af van schema (%s) — herstel",
+                key,
+            )
+
         try:
-            mode = slot["mode"]
             # NOM-O: uitsluitend de NOM-switch — verder niets.
             # Vermogen 0 alleen bij overgang naar leeg/uit (niet bij NOM of NOM-O).
             if mode == MODE_OFF:
@@ -417,6 +559,8 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     mode_entity,
                     str(self._cfg(CONF_NOM_OPTION, DEFAULT_NOM_OPTION)),
                 )
+                # Andere bron zet regelmatig ~2s later weer third_party; opnieuw checken.
+                self._schedule_verify_after_settle()
             elif mode in (MODE_CHARGE, MODE_DISCHARGE):
                 # Eerst externe modus, dan 2s wachten tot laad/ontlaadregeling
                 # beschikbaar is, daarna richting en pas daarna vermogen.
@@ -429,6 +573,14 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ),
                 )
                 await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
+                # Uur kan tijdens de sleep gewisseld zijn — niet doorzetten.
+                if dt_util.now().hour != hour:
+                    _LOGGER.info(
+                        "Anker Schedule: uur gewisseld tijdens settle — "
+                        "charge/discharge-apply afgebroken"
+                    )
+                    self._last_applied_key = None
+                    return
                 await self._async_select_option(
                     direction,
                     str(
@@ -439,7 +591,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                     ),
                 )
-                await self._async_set_power(power_entity, int(slot["power"]))
+                await self._async_set_power(power_entity, power)
                 await self._async_set_number(
                     charge_soc_entity
                     if mode == MODE_CHARGE

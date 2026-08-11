@@ -158,7 +158,7 @@ De moduskleuren bepalen niet alleen de legenda, maar ook de vulling, rand en glo
 - **Uit / leeg** → vermogen op **0 W** + NOM-switch UIT (tenzij `off_option` gezet)
 - **Na laden/ontladen → NOM of NOM-O** → geen vermogen-reset aan het einde van het uur
 
-Toepassen gebeurt bij HA-start, elk heel uur, en bij schema-wijzigingen voor het huidige uur.
+Toepassen gebeurt bij HA-start, elk heel uur, bij schema-wijzigingen voor het huidige uur, en **elke minuut** als de live bedrijfsmodus niet meer overeenkomt met het schema (bijv. als Anker of een andere automation tussentijds weer `third_party_control` zet). Na een NOM-apply volgt ook een korte nabcontrole (~3s) om die race te winnen.
 
 ## SOC per uur
 
