@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.15";
+const CARD_VERSION = "1.0.16";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -40,7 +40,7 @@ const DEFAULTS = {
   nom_switch_entity: "switch.anker_nom",
   nom_o_label: "NOM-O",
   nom_o_tag: "N-O",
-  show_soc: false,
+  show_soc: true,
   default_charge_soc: 100,
   default_discharge_soc: 10,
   nom_option: "0",
@@ -1054,6 +1054,13 @@ class AnkerScheduleCard extends HTMLElement {
       this._els.modeValue.textContent = "entity?";
       return;
     }
+    // NOM-O = alleen de switch; die wint altijd van de bedrijfsmodus-select.
+    const nomSw = this._hass.states[this._nomSwitchEntity()]?.state;
+    if (nomSw === "on") {
+      this._els.modeValue.textContent = this._nomOLabel();
+      this._els.modeValue.classList.add("is-self");
+      return;
+    }
     const mode = this._prettyMode(st.state);
     const dir = this._hass.states[this._config.direction_entity]?.state;
     const power = this._hass.states[this._powerEntity()]?.state;
@@ -1066,12 +1073,6 @@ class AnkerScheduleCard extends HTMLElement {
             ? "ontladen"
             : dir;
       extra = power != null ? ` · ${d} ${power}W` : ` · ${d}`;
-    }
-    const nomSw = this._hass.states[this._nomSwitchEntity()]?.state;
-    if (mode !== "Extern" && nomSw === "on") {
-      this._els.modeValue.textContent = this._nomOLabel();
-      this._els.modeValue.classList.add("is-self");
-      return;
     }
     this._els.modeValue.textContent = `${mode}${extra}`;
     this._els.modeValue.classList.toggle("is-self", mode === "NOM");
@@ -1455,8 +1456,12 @@ class AnkerScheduleCard extends HTMLElement {
         color: var(--tint-discharge); border-color: var(--border-discharge);
         background: var(--fill-discharge); box-shadow: 0 0 8px var(--glow-discharge);
       }
-      .hour.current { outline: 1px solid rgba(234,246,255,0.85); }
-      .hour.selected { outline: 1px solid rgba(63,182,255,1); }
+      .hour.current {
+        outline: 3px solid var(--color-current);
+        outline-offset: 1px;
+        box-shadow: 0 0 12px rgba(234,246,255,0.55);
+      }
+      .hour.selected { outline: 2px solid rgba(63,182,255,1); outline-offset: 1px; }
       .screen.scheduler-off .hour.mode-nom,
       .screen.scheduler-off .hour.mode-nom_o,
       .screen.scheduler-off .hour.mode-charge,

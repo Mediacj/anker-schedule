@@ -119,7 +119,7 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | `max_power` | number | `3500` | Maximum van de vermogensslider |
 | `min_power` | number | `0` | Minimum van de vermogensslider |
 | `power_step` | number | `50` | Stapgrootte slider (W) |
-| `show_soc` | bool | `false` | SOC weergeven: extra slider onder het vermogen bij laden/ontladen |
+| `show_soc` | bool | `true` | SOC weergeven: extra slider onder het vermogen bij laden/ontladen |
 | `default_charge_soc` | number | `100` | Standaard max SOC (%) voor een nieuw laad-uur |
 | `default_discharge_soc` | number | `10` | Standaard min SOC (%) voor een nieuw ontlaad-uur |
 | `colors.nom` | hex | `#1b8a3a` | Kleur NOM |
@@ -162,7 +162,7 @@ Toepassen gebeurt bij HA-start, elk heel uur, bij schema-wijzigingen voor het hu
 
 ## SOC per uur
 
-Zet `show_soc: true` in de card-YAML (of vink **SOC weergeven** aan in de card-editor). Selecteer je een uur met **Laden** of **Ontladen**, dan verschijnt onder de vermogensslider een tweede slider in hetzelfde kader:
+Zet `show_soc: false` in de card-YAML om de SOC-slider te verbergen (standaard aan). Selecteer je een uur met **Laden** of **Ontladen**, dan verschijnt onder de vermogensslider een tweede slider in hetzelfde kader:
 
 - **Laden** → *Max SOC*: tot welk laadniveau dat uur geladen wordt (standaard 100%), geschreven naar `charge_soc_entity`.
 - **Ontladen** → *Min SOC*: tot welk niveau dat uur ontladen mag worden (standaard 10%), geschreven naar `discharge_soc_entity`.
