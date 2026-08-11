@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.16";
+const CARD_VERSION = "1.0.17";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -270,7 +270,7 @@ class AnkerScheduleCard extends HTMLElement {
   }
 
   _defaultSocForMode(mode) {
-    if (mode === "charge") return this._defaultChargeSoc();
+    if (mode === "charge" || mode === "nom") return this._defaultChargeSoc();
     if (mode === "discharge") return this._defaultDischargeSoc();
     return 0;
   }
@@ -283,6 +283,55 @@ class AnkerScheduleCard extends HTMLElement {
 
   _showSoc() {
     return !!this._config?.show_soc;
+  }
+
+  _slotSocs(slot) {
+    const mode = slot?.mode || "off";
+    const maxFb = mode === "charge" || mode === "nom" ? this._defaultChargeSoc() : 0;
+    const minFb = mode === "discharge" || mode === "nom" ? this._defaultDischargeSoc() : 0;
+    let socMax =
+      slot?.soc_max !== undefined && slot?.soc_max !== null
+        ? this._clampSoc(slot.soc_max, maxFb)
+        : mode === "charge" || mode === "nom"
+          ? this._clampSoc(slot?.soc, maxFb)
+          : maxFb;
+    let socMin =
+      slot?.soc_min !== undefined && slot?.soc_min !== null
+        ? this._clampSoc(slot.soc_min, minFb)
+        : mode === "discharge"
+          ? this._clampSoc(slot?.soc, minFb)
+          : minFb;
+    if (mode === "nom" && (slot?.soc_max === undefined || slot?.soc_max === null) && (slot?.soc_min === undefined || slot?.soc_min === null) && (slot?.soc === undefined || slot?.soc === null)) {
+      socMax = this._defaultChargeSoc();
+      socMin = this._defaultDischargeSoc();
+    }
+    return { socMax, socMin };
+  }
+
+  _encodeSocToken(mode, socMax, socMin) {
+    if (mode === "nom") return `${socMax}/${socMin}`;
+    if (mode === "charge") return String(socMax);
+    if (mode === "discharge") return String(socMin);
+    return "0";
+  }
+
+  _decodeSocToken(token, mode) {
+    const maxFb = mode === "charge" || mode === "nom" ? this._defaultChargeSoc() : 0;
+    const minFb = mode === "discharge" || mode === "nom" ? this._defaultDischargeSoc() : 0;
+    const text = String(token || "").trim();
+    if (text.includes("/")) {
+      const [left, right] = text.split("/", 2);
+      return {
+        socMax: this._clampSoc(left, maxFb),
+        socMin: this._clampSoc(right, minFb),
+      };
+    }
+    if (text === "") return { socMax: maxFb, socMin: minFb };
+    const single = this._clampSoc(text, this._defaultSocForMode(mode));
+    if (mode === "charge") return { socMax: single, socMin: minFb };
+    if (mode === "discharge") return { socMax: maxFb, socMin: single };
+    if (mode === "nom") return { socMax: single, socMin: minFb };
+    return { socMax: 0, socMin: 0 };
   }
 
   /** Eigen tekst voor NOM-O; leeg valt terug op de standaardnaam. */
@@ -308,35 +357,48 @@ class AnkerScheduleCard extends HTMLElement {
     return {
       mode: "off",
       power: this._defaultPower(),
-      soc: this._defaultSocForMode("off"),
+      soc: 0,
+      soc_max: 0,
+      soc_min: 0,
     };
   }
 
   _normalizeSlot(value) {
     const base = this._defaultSlot();
+    const pack = (mode, power, partial = {}) => {
+      const { socMax, socMin } = this._slotSocs({ mode, ...partial });
+      return {
+        mode,
+        power,
+        soc: mode === "discharge" ? socMin : socMax,
+        soc_max: socMax,
+        soc_min: socMin,
+      };
+    };
     if (value === true) {
-      return { mode: "nom", power: base.power, soc: this._defaultSocForMode("nom") };
+      return pack("nom", base.power, {
+        soc_max: this._defaultChargeSoc(),
+        soc_min: this._defaultDischargeSoc(),
+      });
     }
     if (value === false || value == null) return { ...base };
     if (typeof value === "string" && MODES.includes(value)) {
-      return {
-        mode: value,
-        power: base.power,
-        soc: this._defaultSocForMode(value),
-      };
+      if (value === "nom") {
+        return pack("nom", base.power, {
+          soc_max: this._defaultChargeSoc(),
+          soc_min: this._defaultDischargeSoc(),
+        });
+      }
+      return pack(value, base.power);
     }
     if (typeof value === "object") {
       const mode = MODES.includes(value.mode) ? value.mode : "off";
       const power = Number(value.power);
-      const fallbackSoc = this._defaultSocForMode(mode);
-      return {
+      return pack(
         mode,
-        power: Number.isFinite(power) && power >= 0 ? power : base.power,
-        soc:
-          value.soc === undefined || value.soc === null
-            ? fallbackSoc
-            : this._clampSoc(value.soc, fallbackSoc),
-      };
+        Number.isFinite(power) && power >= 0 ? power : base.power,
+        value
+      );
     }
     return { ...base };
   }
@@ -384,16 +446,23 @@ class AnkerScheduleCard extends HTMLElement {
     this._queueStorageWrite();
   }
 
-  /** Compact format: e=1;m=oonxc...;p=0,0,500,...;s=10,100,... */
+  /** Compact format: e=1;m=oonxc...;p=0,0,500,...;s=100,10,100/10,... */
   _serializeCompact() {
     const m = this._schedule
       .map((s) => MODE_TO_CHAR[s.mode] || "o")
       .join("");
-    const p = this._schedule.map((s) => Math.round(s.power || 0)).join(",");
-    const s = this._schedule
-      .map((slot) =>
-        this._clampSoc(slot.soc, this._defaultSocForMode(slot.mode))
+    const p = this._schedule
+      .map((s) =>
+        s.mode === "charge" || s.mode === "discharge"
+          ? String(Math.round(s.power || 0))
+          : ""
       )
+      .join(",");
+    const s = this._schedule
+      .map((slot) => {
+        const { socMax, socMin } = this._slotSocs(slot);
+        return this._encodeSocToken(slot.mode, socMax, socMin);
+      })
       .join(",");
     return `e=${this._enabled ? 1 : 0};m=${m};p=${p};s=${s}`;
   }
@@ -423,22 +492,20 @@ class AnkerScheduleCard extends HTMLElement {
     const powers = (parts.p || "")
       .split(",")
       .map((n) => parseInt(n, 10));
-    const socs = (parts.s || "")
-      .split(",")
-      .map((n) => parseInt(n, 10));
+    const socTokens = (parts.s || "").split(",");
     const hours = [];
     for (let i = 0; i < 24; i++) {
       const mode = CHAR_TO_MODE[parts.m[i]] || "off";
-      const fallbackSoc = this._defaultSocForMode(mode);
+      const { socMax, socMin } = this._decodeSocToken(socTokens[i] || "", mode);
       hours.push({
         mode,
         power:
           Number.isFinite(powers[i]) && powers[i] >= 0
             ? powers[i]
             : this._defaultPower(),
-        soc: Number.isFinite(socs[i])
-          ? this._clampSoc(socs[i], fallbackSoc)
-          : fallbackSoc,
+        soc: mode === "discharge" ? socMin : socMax,
+        soc_max: socMax,
+        soc_min: socMin,
       });
     }
     return {
@@ -643,6 +710,13 @@ class AnkerScheduleCard extends HTMLElement {
               </div>
               <input class="soc-slider" type="range" min="0" max="100" step="1" value="100">
             </div>
+            <div class="soc-wrap soc-min-wrap hidden">
+              <div class="power-labels">
+                <span class="soc-min-label">Min SOC</span>
+                <span class="soc-min-value">10 %</span>
+              </div>
+              <input class="soc-min-slider" type="range" min="0" max="100" step="1" value="10">
+            </div>
           </div>
 
           <div class="legend">
@@ -690,6 +764,10 @@ class AnkerScheduleCard extends HTMLElement {
       socSlider: card.querySelector(".soc-slider"),
       socLabel: card.querySelector(".soc-label"),
       socValue: card.querySelector(".soc-value"),
+      socMinWrap: card.querySelector(".soc-min-wrap"),
+      socMinSlider: card.querySelector(".soc-min-slider"),
+      socMinLabel: card.querySelector(".soc-min-label"),
+      socMinValue: card.querySelector(".soc-min-value"),
       applyBtn: card.querySelector(".apply-now-btn"),
     };
 
@@ -724,17 +802,37 @@ class AnkerScheduleCard extends HTMLElement {
 
     this._els.socSlider.addEventListener("input", () => {
       if (this._selectedHour == null) return;
-      const mode = this._schedule[this._selectedHour].mode;
+      const slot = this._schedule[this._selectedHour];
       const soc = this._clampSoc(
         this._els.socSlider.value,
-        this._defaultSocForMode(mode)
+        this._defaultChargeSoc()
       );
-      this._schedule[this._selectedHour].soc = soc;
+      slot.soc_max = soc;
+      if (slot.mode !== "discharge") slot.soc = soc;
       this._els.socSlider.value = String(soc);
       this._els.socValue.textContent = `${soc} %`;
       this._persist();
     });
     this._els.socSlider.addEventListener("change", () => {
+      if (this._selectedHour == null) return;
+      const now = new Date().getHours();
+      if (this._selectedHour === now) this._maybeApplySchedule(true);
+    });
+
+    this._els.socMinSlider.addEventListener("input", () => {
+      if (this._selectedHour == null) return;
+      const slot = this._schedule[this._selectedHour];
+      const soc = this._clampSoc(
+        this._els.socMinSlider.value,
+        this._defaultDischargeSoc()
+      );
+      slot.soc_min = soc;
+      if (slot.mode === "discharge") slot.soc = soc;
+      this._els.socMinSlider.value = String(soc);
+      this._els.socMinValue.textContent = `${soc} %`;
+      this._persist();
+    });
+    this._els.socMinSlider.addEventListener("change", () => {
       if (this._selectedHour == null) return;
       const now = new Date().getHours();
       if (this._selectedHour === now) this._maybeApplySchedule(true);
@@ -748,7 +846,9 @@ class AnkerScheduleCard extends HTMLElement {
           this._schedule = Array.from({ length: 24 }, () => ({
             mode: "nom",
             power,
-            soc: this._defaultSocForMode("nom"),
+            soc: this._defaultChargeSoc(),
+            soc_max: this._defaultChargeSoc(),
+            soc_min: this._defaultDischargeSoc(),
           }));
           this._afterScheduleEdit();
         } else if (action === "all-off") {
@@ -850,13 +950,40 @@ class AnkerScheduleCard extends HTMLElement {
         : Number.isFinite(Number(prev.power))
           ? Number(prev.power)
           : this._defaultPower();
-    const sameFamily =
-      (prev.mode === "charge" && mode === "charge") ||
-      (prev.mode === "discharge" && mode === "discharge");
-    const soc = sameFamily
-      ? this._clampSoc(prev.soc, this._defaultSocForMode(mode))
-      : this._defaultSocForMode(mode);
-    this._schedule[hour] = { mode, power: keepPower, soc };
+    const sameCharge = prev.mode === "charge" && mode === "charge";
+    const sameDischarge = prev.mode === "discharge" && mode === "discharge";
+    const sameNom = prev.mode === "nom" && mode === "nom";
+    const prevSocs = this._slotSocs(prev);
+    let socMax;
+    let socMin;
+    if (mode === "nom") {
+      socMax = sameNom
+        ? prevSocs.socMax
+        : prev.mode === "charge"
+          ? prevSocs.socMax
+          : this._defaultChargeSoc();
+      socMin = sameNom
+        ? prevSocs.socMin
+        : prev.mode === "discharge"
+          ? prevSocs.socMin
+          : this._defaultDischargeSoc();
+    } else if (mode === "charge") {
+      socMax = sameCharge ? prevSocs.socMax : this._defaultChargeSoc();
+      socMin = 0;
+    } else if (mode === "discharge") {
+      socMax = 0;
+      socMin = sameDischarge ? prevSocs.socMin : this._defaultDischargeSoc();
+    } else {
+      socMax = 0;
+      socMin = 0;
+    }
+    this._schedule[hour] = {
+      mode,
+      power: keepPower,
+      soc: mode === "discharge" ? socMin : socMax,
+      soc_max: socMax,
+      soc_min: socMin,
+    };
     if (select) {
       this._selectedHour = hour;
     }
@@ -893,20 +1020,35 @@ class AnkerScheduleCard extends HTMLElement {
       this._els.powerValue.textContent = `${Math.round(power)} W`;
     }
 
-    const showSoc = needsPower && this._showSoc();
-    this._els.socWrap?.classList.toggle("hidden", !showSoc);
-    if (showSoc) {
-      const fallback = this._defaultSocForMode(slot.mode);
-      const soc = this._clampSoc(slot.soc, fallback);
-      this._schedule[h].soc = soc;
-      this._els.socSlider.value = String(soc);
-      this._els.socValue.textContent = `${soc} %`;
-      this._els.socLabel.textContent =
-        slot.mode === "discharge" ? "Min SOC" : "Max SOC";
-      this._els.socSlider.style.accentColor =
-        slot.mode === "discharge"
-          ? this._config.colors.discharge
-          : this._config.colors.charge;
+    const showSoc = this._showSoc() && (
+      slot.mode === "charge" ||
+      slot.mode === "discharge" ||
+      slot.mode === "nom"
+    );
+    const showMax =
+      showSoc && (slot.mode === "charge" || slot.mode === "nom");
+    const showMin =
+      showSoc && (slot.mode === "discharge" || slot.mode === "nom");
+    const { socMax, socMin } = this._slotSocs(slot);
+    this._schedule[h].soc_max = socMax;
+    this._schedule[h].soc_min = socMin;
+    this._schedule[h].soc =
+      slot.mode === "discharge" ? socMin : socMax;
+
+    this._els.socWrap?.classList.toggle("hidden", !showMax);
+    if (showMax) {
+      this._els.socSlider.value = String(socMax);
+      this._els.socValue.textContent = `${socMax} %`;
+      this._els.socLabel.textContent = "Max SOC";
+      this._els.socSlider.style.accentColor = this._config.colors.charge;
+    }
+
+    this._els.socMinWrap?.classList.toggle("hidden", !showMin);
+    if (showMin) {
+      this._els.socMinSlider.value = String(socMin);
+      this._els.socMinValue.textContent = `${socMin} %`;
+      this._els.socMinLabel.textContent = "Min SOC";
+      this._els.socMinSlider.style.accentColor = this._config.colors.discharge;
     }
   }
 
@@ -1227,8 +1369,8 @@ class AnkerScheduleCard extends HTMLElement {
       return ok("Planner staat uit — NOM-switch uit");
     }
 
-    const soc = this._clampSoc(slot.soc, this._defaultSocForMode(slot.mode));
-    const key = `${hour}:${slot.mode}:${Math.round(slot.power || 0)}:${soc}`;
+    const { socMax, socMin } = this._slotSocs(slot);
+    const key = `${hour}:${slot.mode}:${Math.round(slot.power || 0)}:${socMax}:${socMin}`;
     if (!force && this._lastAppliedKey === key) {
       return ok(`Al actief: ${summary}`);
     }
@@ -1255,6 +1397,8 @@ class AnkerScheduleCard extends HTMLElement {
           this._config.entity,
           this._config.nom_option || "0"
         );
+        await this._setNumber(this._chargeSocEntity(), socMax);
+        await this._setNumber(this._dischargeSocEntity(), socMin);
         this._lastAppliedKey = key;
         return ok(`${summary} toegepast`);
       }
@@ -1276,7 +1420,7 @@ class AnkerScheduleCard extends HTMLElement {
         slot.mode === "charge"
           ? this._chargeSocEntity()
           : this._dischargeSocEntity(),
-        soc
+        slot.mode === "charge" ? socMax : socMin
       );
       this._lastAppliedKey = key;
       return ok(`${summary} toegepast`);
@@ -1473,7 +1617,7 @@ class AnkerScheduleCard extends HTMLElement {
         border-radius: 10px; background: rgba(255,255,255,0.04);
         border: 1px solid rgba(63,182,255,0.18);
       }
-      .editor-panel.hidden, .power-wrap.hidden, .soc-wrap.hidden, .hidden { display: none; }
+      .editor-panel.hidden, .power-wrap.hidden, .soc-wrap.hidden, .soc-min-wrap.hidden, .hidden { display: none; }
       .editor-head {
         display: flex; justify-content: space-between; align-items: center;
         margin-bottom: 8px; color: #d8e6ee; font-size: 12px;
@@ -1486,10 +1630,10 @@ class AnkerScheduleCard extends HTMLElement {
         display: flex; justify-content: space-between;
         color: #9fc4d6; font-size: 12px; margin-bottom: 6px;
       }
-      .power-wrap, .soc-wrap { width: 100%; }
-      .soc-wrap { margin-top: 10px; }
-      .power-value, .soc-value { color: #eaf6ff; font-variant-numeric: tabular-nums; }
-      .power-slider, .soc-slider {
+      .power-wrap, .soc-wrap, .soc-min-wrap { width: 100%; }
+      .soc-wrap, .soc-min-wrap { margin-top: 10px; }
+      .power-value, .soc-value, .soc-min-value { color: #eaf6ff; font-variant-numeric: tabular-nums; }
+      .power-slider, .soc-slider, .soc-min-slider {
         width: 100%; accent-color: var(--color-charge); cursor: pointer;
         display: block; margin: 0; box-sizing: border-box;
       }

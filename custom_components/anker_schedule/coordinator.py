@@ -53,11 +53,11 @@ from .const import (
 )
 from .schedule import (
     clamp_soc,
-    default_soc_for_mode,
     empty_compact,
     normalize_schedule,
     parse_compact,
     serialize_compact,
+    slot_socs,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -373,6 +373,17 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
         return state.state == "on"
 
+    def _number_matches(self, entity_id: str, value: int) -> bool:
+        if not entity_id:
+            return True
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return True
+        try:
+            return round(float(state.state)) == int(value)
+        except (TypeError, ValueError):
+            return False
+
     def _slot_matches_live(
         self,
         *,
@@ -381,7 +392,8 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         direction: str,
         power_entity: str,
         power: int,
-        soc: int,
+        soc_max: int,
+        soc_min: int,
         charge_soc_entity: str,
         discharge_soc_entity: str,
     ) -> bool:
@@ -408,6 +420,10 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return False
             if switch_on is True:
                 return False
+            if not self._number_matches(charge_soc_entity, soc_max):
+                return False
+            if not self._number_matches(discharge_soc_entity, soc_min):
+                return False
             return True
 
         if mode not in (MODE_CHARGE, MODE_DISCHARGE):
@@ -430,27 +446,12 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if dir_wanted is None or self._select_value(direction) != dir_wanted:
             return False
 
-        if power_entity:
-            state = self.hass.states.get(power_entity)
-            if state is not None:
-                try:
-                    if round(float(state.state)) != int(power):
-                        return False
-                except (TypeError, ValueError):
-                    return False
+        if not self._number_matches(power_entity, power):
+            return False
 
-        soc_entity = (
-            charge_soc_entity if mode == MODE_CHARGE else discharge_soc_entity
-        )
-        if soc_entity:
-            state = self.hass.states.get(soc_entity)
-            if state is not None:
-                try:
-                    if round(float(state.state)) != int(soc):
-                        return False
-                except (TypeError, ValueError):
-                    return False
-        return True
+        if mode == MODE_CHARGE:
+            return self._number_matches(charge_soc_entity, soc_max)
+        return self._number_matches(discharge_soc_entity, soc_min)
 
     def _schedule_verify_after_settle(self) -> None:
         """Na NOM opnieuw controleren: Anker/andere bron zet soms ~2s later third_party."""
@@ -476,20 +477,20 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hour = dt_util.now().hour
         slot = self.data["hours"][hour]
         enabled = bool(self.data["enabled"])
-        soc = clamp_soc(
-            slot.get("soc"),
-            default_soc_for_mode(
-                slot["mode"],
-                charge_soc=self.default_charge_soc,
-                discharge_soc=self.default_discharge_soc,
-            ),
+        soc_max, soc_min = slot_socs(
+            slot,
+            charge_soc=self.default_charge_soc,
+            discharge_soc=self.default_discharge_soc,
         )
+        soc = soc_min if slot["mode"] == MODE_DISCHARGE else soc_max
 
         self.data = {
             **self.data,
             "current_mode": slot["mode"],
             "current_power": int(slot["power"]),
             "current_soc": soc,
+            "current_soc_max": soc_max,
+            "current_soc_min": soc_min,
             "current_hour": hour,
         }
         self.async_set_updated_data(self.data)
@@ -516,14 +517,15 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         mode = slot["mode"]
         power = int(slot["power"])
-        key = f"{hour}:{mode}:{power}:{soc}"
+        key = f"{hour}:{mode}:{power}:{soc_max}:{soc_min}"
         matches_live = self._slot_matches_live(
             mode=mode,
             mode_entity=mode_entity,
             direction=direction,
             power_entity=power_entity,
             power=power,
-            soc=soc,
+            soc_max=soc_max,
+            soc_min=soc_min,
             charge_soc_entity=charge_soc_entity,
             discharge_soc_entity=discharge_soc_entity,
         )
@@ -559,6 +561,8 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     mode_entity,
                     str(self._cfg(CONF_NOM_OPTION, DEFAULT_NOM_OPTION)),
                 )
+                await self._async_set_number(charge_soc_entity, soc_max)
+                await self._async_set_number(discharge_soc_entity, soc_min)
                 # Andere bron zet regelmatig ~2s later weer third_party; opnieuw checken.
                 self._schedule_verify_after_settle()
             elif mode in (MODE_CHARGE, MODE_DISCHARGE):
@@ -593,10 +597,8 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 await self._async_set_power(power_entity, power)
                 await self._async_set_number(
-                    charge_soc_entity
-                    if mode == MODE_CHARGE
-                    else discharge_soc_entity,
-                    soc,
+                    charge_soc_entity if mode == MODE_CHARGE else discharge_soc_entity,
+                    soc_max if mode == MODE_CHARGE else soc_min,
                 )
             self._last_applied_key = key
             _LOGGER.debug("Anker schedule toegepast: %s", key)

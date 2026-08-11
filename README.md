@@ -151,7 +151,7 @@ De moduskleuren bepalen niet alleen de legenda, maar ook de vulling, rand en glo
 
 ## Gedrag
 
-- **NOM** → bedrijfsmodus = `self_consumption`/`0` + NOM-switch UIT
+- **NOM** → bedrijfsmodus = `self_consumption`/`0` + NOM-switch UIT + max/min SOC
 - **NOM-O** → alleen `switch.anker_nom` AAN (geen select, geen vermogen)
 - **Laden** → externe modus (`3`), **2s wachten**, daarna charge + vermogen + max SOC
 - **Ontladen** → externe modus (`3`), **2s wachten**, daarna discharge + vermogen + min SOC
@@ -162,9 +162,10 @@ Toepassen gebeurt bij HA-start, elk heel uur, bij schema-wijzigingen voor het hu
 
 ## SOC per uur
 
-Zet `show_soc: false` in de card-YAML om de SOC-slider te verbergen (standaard aan). Selecteer je een uur met **Laden** of **Ontladen**, dan verschijnt onder de vermogensslider een tweede slider in hetzelfde kader:
+Zet `show_soc: false` in de card-YAML om de SOC-slider te verbergen (standaard aan). Selecteer je een uur met **Laden**, **Ontladen** of **NOM**, dan verschijnt onder (of i.p.v.) de vermogensslider de SOC-regelaar(s) in hetzelfde kader:
 
-- **Laden** → *Max SOC*: tot welk laadniveau dat uur geladen wordt (standaard 100%), geschreven naar `charge_soc_entity`.
-- **Ontladen** → *Min SOC*: tot welk niveau dat uur ontladen mag worden (standaard 10%), geschreven naar `discharge_soc_entity`.
+- **Laden** → *Max SOC*
+- **Ontladen** → *Min SOC*
+- **NOM** → beide: *Max SOC* en *Min SOC* (worden naar `charge_soc_entity` en `discharge_soc_entity` geschreven)
 
 De waarde staat per uur in het schema, dus elk laad- of ontlaadblok kan een eigen SOC-grens hebben. Staat `show_soc` uit, dan gebruikt elk uur gewoon de standaardwaarde. Is er geen SOC-entity geconfigureerd, dan wordt er niets geschreven.
