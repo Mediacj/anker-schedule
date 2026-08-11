@@ -49,6 +49,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    # Schema-persist mag geen reload triggeren (race met apply / minuutcheck).
+    if hass.data.get(f"{DOMAIN}_skip_reload"):
+        return
     await hass.config_entries.async_reload(entry.entry_id)
 
 

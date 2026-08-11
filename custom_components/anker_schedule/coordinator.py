@@ -219,7 +219,13 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_persist_raw(self, raw: str) -> None:
         data = {**self.entry.data, "schedule_raw": raw}
-        self.hass.config_entries.async_update_entry(self.entry, data=data)
+        # Voorkom volledige reload bij elke schema-write (race met apply).
+        self.hass.data[f"{DOMAIN}_skip_reload"] = True
+        try:
+            self.hass.config_entries.async_update_entry(self.entry, data=data)
+            await asyncio.sleep(0)
+        finally:
+            self.hass.data[f"{DOMAIN}_skip_reload"] = False
 
     def snap_power(self, watts: float | int) -> int:
         try:
@@ -232,20 +238,44 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def _async_hourly_tick(self, _now: datetime) -> None:
+        # Uurwisseling: één keer toepassen (ook UIT → stand-by).
         self.hass.async_create_task(self.async_apply_schedule(force=True))
 
+    def _refresh_schedule_from_entry(self) -> None:
+        """Herlees compact schema uit config entry vóór elke minuutcontrole."""
+        stored = self.entry.data.get("schedule_raw")
+        if not stored or stored == self.data.get("raw"):
+            return
+        parsed = self._parse(stored)
+        if parsed is None:
+            return
+        _LOGGER.debug("Anker Schedule: schema uit entry herladen vóór minuutcheck")
+        self._set_from_parsed(parsed, notify=True)
+
     async def _async_update_data(self) -> dict[str, Any]:
+        # Altijd eerst het actuele schema checken — niet op stale memory vertrouwen.
+        self._refresh_schedule_from_entry()
+
         hour = dt_util.now().hour
         slot = self.data["hours"][hour]
         self.data = {
             **self.data,
             "current_mode": slot["mode"],
-            "current_power": int(slot["power"]),
-            "current_soc": int(slot.get("soc", 0)),
+            "current_power": int(slot["power"]) if slot["mode"] != MODE_OFF else 0,
+            "current_soc": int(slot.get("soc", 0)) if slot["mode"] != MODE_OFF else 0,
             "current_hour": hour,
         }
-        # Elke minuut: niet alleen toepassen bij uurwisseling, maar ook
-        # herstellen als een andere bron de modus tussentijds overschrijft.
+
+        # Huidig uur = uit: stand-by — geen drift-check / geen mode-herstel.
+        if slot.get("mode") == MODE_OFF:
+            _LOGGER.debug(
+                "Anker Schedule uur %s uit — minutencheck overgeslagen (stand-by)",
+                hour,
+            )
+            self.async_set_updated_data(self.data)
+            return self.data
+
+        # Elke minuut: herstellen als live-modus afwijkt van het (zojuist herlezen) schema.
         await self.async_apply_schedule(force=False)
         return self.data
 
@@ -556,6 +586,8 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # NOM-O: uitsluitend de NOM-switch — verder niets.
             # Vermogen 0 alleen bij overgang naar leeg/uit (niet bij NOM of NOM-O).
             if mode == MODE_OFF:
+                # Annuleer pending NOM-verify; UIT = stand-by voor dit uur.
+                self._cancel_verify()
                 await self._async_set_power(power_entity, 0)
 
             if mode == MODE_NOM_O:
