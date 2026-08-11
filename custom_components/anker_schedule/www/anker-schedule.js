@@ -4,7 +4,7 @@
  * Backend applies the hourly plan; entities come from the integration config.
  */
 
-const CARD_VERSION = "1.0.17";
+const CARD_VERSION = "1.0.18";
 const LOGO_URL = `/anker_schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
@@ -548,9 +548,12 @@ class AnkerScheduleCard extends HTMLElement {
         value.length
       );
     }
+    // Markeer onze eigen write vóór de service-call, zodat een trage
+    // state-update met het óude schema onze NOM-O-edit niet terugzet.
     this._lastStorageRaw = value;
     this._storageSynced = true;
     this._localEditPending = false;
+    this._ignorePullUntil = Date.now() + 2000;
     // Integratie = text.*; losse helper = input_text.*
     const domain = String(entityId).split(".")[0];
     const serviceDomain = domain === "text" ? "text" : "input_text";
@@ -564,6 +567,9 @@ class AnkerScheduleCard extends HTMLElement {
   _pullStorageEntity() {
     const entityId = this._storageEntityId();
     if (!entityId || !this._hass || this._localEditPending) {
+      return;
+    }
+    if (this._ignorePullUntil && Date.now() < this._ignorePullUntil) {
       return;
     }
     const st = this._hass.states[entityId];

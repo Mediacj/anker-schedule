@@ -79,6 +79,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._schedule_entity_id: str | None = None
         self._apply_lock = asyncio.Lock()
         self._unsub_verify = None
+        self._last_mode_key: str | None = None
         self.data = self._fresh_data()
 
     def _cfg(self, key: str, default: Any) -> Any:
@@ -420,10 +421,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return False
             if switch_on is True:
                 return False
-            if not self._number_matches(charge_soc_entity, soc_max):
-                return False
-            if not self._number_matches(discharge_soc_entity, soc_min):
-                return False
+            # SOC-drift alleen: geen volledige mode-mismatch — los apart op.
             return True
 
         if mode not in (MODE_CHARGE, MODE_DISCHARGE):
@@ -453,11 +451,14 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self._number_matches(charge_soc_entity, soc_max)
         return self._number_matches(discharge_soc_entity, soc_min)
 
-    def _schedule_verify_after_settle(self) -> None:
-        """Na NOM opnieuw controleren: Anker/andere bron zet soms ~2s later third_party."""
+    def _cancel_verify(self) -> None:
         if self._unsub_verify is not None:
             self._unsub_verify()
             self._unsub_verify = None
+
+    def _schedule_verify_after_settle(self) -> None:
+        """Na NOM-overgang opnieuw controleren op late third_party-overschrijving."""
+        self._cancel_verify()
 
         @callback
         def _run(_: datetime) -> None:
@@ -518,6 +519,8 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         mode = slot["mode"]
         power = int(slot["power"])
         key = f"{hour}:{mode}:{power}:{soc_max}:{soc_min}"
+        mode_key = f"{hour}:{mode}"
+        transition = self._last_mode_key != mode_key
         matches_live = self._slot_matches_live(
             mode=mode,
             mode_entity=mode_entity,
@@ -534,6 +537,13 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and self._last_applied_key == key
             and matches_live
         ):
+            # NOM: mode klopt al — eventueel alleen SOC bijwerken zonder mode-select.
+            if mode == MODE_NOM:
+                try:
+                    await self._async_set_number(charge_soc_entity, soc_max)
+                    await self._async_set_number(discharge_soc_entity, soc_min)
+                except Exception:  # noqa: BLE001
+                    _LOGGER.debug("Anker SOC-bijwerken mislukt", exc_info=True)
             return
 
         if not matches_live and self._last_applied_key == key:
@@ -548,7 +558,12 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if mode == MODE_OFF:
                 await self._async_set_power(power_entity, 0)
 
-            await self._async_set_nom_switch(mode == MODE_NOM_O)
+            if mode == MODE_NOM_O:
+                # Annuleer pending NOM-verify, anders zet die self_consumption terug.
+                self._cancel_verify()
+                await self._async_set_nom_switch(True)
+            else:
+                await self._async_set_nom_switch(False)
 
             if mode == MODE_OFF:
                 off_option = str(self._cfg(CONF_OFF_OPTION, DEFAULT_OFF_OPTION))
@@ -563,9 +578,11 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 await self._async_set_number(charge_soc_entity, soc_max)
                 await self._async_set_number(discharge_soc_entity, soc_min)
-                # Andere bron zet regelmatig ~2s later weer third_party; opnieuw checken.
-                self._schedule_verify_after_settle()
+                # Alleen na moduswisseling nabchecken — niet bij elke SOC-tick.
+                if transition or force:
+                    self._schedule_verify_after_settle()
             elif mode in (MODE_CHARGE, MODE_DISCHARGE):
+                self._cancel_verify()
                 # Eerst externe modus, dan 2s wachten tot laad/ontlaadregeling
                 # beschikbaar is, daarna richting en pas daarna vermogen.
                 await self._async_select_option(
@@ -601,6 +618,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     soc_max if mode == MODE_CHARGE else soc_min,
                 )
             self._last_applied_key = key
+            self._last_mode_key = mode_key
             _LOGGER.debug("Anker schedule toegepast: %s", key)
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Anker schedule toepassen mislukt")
