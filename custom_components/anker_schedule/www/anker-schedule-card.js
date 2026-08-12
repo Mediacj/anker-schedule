@@ -3,7 +3,7 @@
  * Do not register this file as a Lovelace resource; use the stub instead.
  */
 
-const CARD_VERSION = "1.0.20";
+const CARD_VERSION = "1.0.21";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -112,8 +112,9 @@ class AnkerScheduleCard extends HTMLElement {
         ...(config || {}),
         colors: { ...DEFAULTS.colors, ...((config && config.colors) || {}) },
       };
-      this._brush = this._brush || "nom";
-      this._selectedHour = this._selectedHour ?? null;
+      this._selectedHours =
+        this._selectedHours instanceof Set ? this._selectedHours : new Set();
+      this._activeMode = this._activeMode ?? null;
       this._lastAppliedKey = null;
       this._schedule = this._normalizeSchedule(
         this._loadSchedule() ?? this._config.schedule
@@ -720,12 +721,12 @@ class AnkerScheduleCard extends HTMLElement {
             </div>
           </div>
 
-          <div class="brush-row" role="toolbar" aria-label="Penseel">
-            <button type="button" class="brush" data-brush="off">Uit</button>
-            <button type="button" class="brush" data-brush="nom">NOM</button>
-            <button type="button" class="brush" data-brush="nom_o">NOM-O</button>
-            <button type="button" class="brush" data-brush="charge">Laden</button>
-            <button type="button" class="brush" data-brush="discharge">Ontladen</button>
+          <div class="brush-row" role="toolbar" aria-label="Modus toekennen">
+            <button type="button" class="brush" data-brush="off" disabled>Uit</button>
+            <button type="button" class="brush" data-brush="nom" disabled>NOM</button>
+            <button type="button" class="brush" data-brush="nom_o" disabled>NOM-O</button>
+            <button type="button" class="brush" data-brush="charge" disabled>Laden</button>
+            <button type="button" class="brush" data-brush="discharge" disabled>Ontladen</button>
           </div>
 
           <div class="hours" role="grid" aria-label="24 uur schema"></div>
@@ -772,6 +773,11 @@ class AnkerScheduleCard extends HTMLElement {
             <button type="button" class="apply-now-btn" data-action="apply-now">Nu toepassen</button>
           </div>
 
+          <div class="footer-bar">
+            <button type="button" class="selection-clear hidden" data-action="clear-selection">Wis selectie</button>
+            <span class="selection-count" aria-live="polite">0 geselecteerd</span>
+          </div>
+
         </div>
       </div>
     `;
@@ -808,6 +814,9 @@ class AnkerScheduleCard extends HTMLElement {
       socMinLabel: card.querySelector(".soc-min-label"),
       socMinValue: card.querySelector(".soc-min-value"),
       applyBtn: card.querySelector(".apply-now-btn"),
+      brushRow: card.querySelector(".brush-row"),
+      selectionCount: card.querySelector(".selection-count"),
+      selectionClear: card.querySelector(".selection-clear"),
     };
 
     this._els.toggleBtn.addEventListener("click", () => {
@@ -819,62 +828,67 @@ class AnkerScheduleCard extends HTMLElement {
 
     this._els.brushes.forEach((btn) => {
       btn.addEventListener("click", () => {
-        this._brush = btn.dataset.brush;
-        this._syncChrome();
+        this._assignModeToSelection(btn.dataset.brush);
       });
     });
 
     this._els.powerSlider.addEventListener("input", () => {
-      if (this._selectedHour == null) return;
+      if (!this._hasSelection()) return;
       const power = this._snapPower(this._els.powerSlider.value);
-      this._schedule[this._selectedHour].power = power;
       this._els.powerSlider.value = String(power);
       this._els.powerValue.textContent = `${Math.round(power)} W`;
-      this._updateHourButton(this._selectedHour);
+      for (const h of this._selectedHours) {
+        this._schedule[h].power = power;
+        this._updateHourButton(h);
+      }
       this._persist();
     });
     this._els.powerSlider.addEventListener("change", () => {
-      if (this._selectedHour == null) return;
+      if (!this._hasSelection()) return;
       const now = new Date().getHours();
-      if (this._selectedHour === now) this._maybeApplySchedule(true);
+      if (this._selectedHours.has(now)) this._maybeApplySchedule(true);
     });
 
     this._els.socSlider.addEventListener("input", () => {
-      if (this._selectedHour == null) return;
-      const slot = this._schedule[this._selectedHour];
+      if (!this._hasSelection()) return;
       const soc = this._clampSoc(
         this._els.socSlider.value,
         this._defaultChargeSoc()
       );
-      slot.soc_max = soc;
-      if (slot.mode !== "discharge") slot.soc = soc;
       this._els.socSlider.value = String(soc);
       this._els.socValue.textContent = `${soc} %`;
+      for (const h of this._selectedHours) {
+        const slot = this._schedule[h];
+        slot.soc_max = soc;
+        if (slot.mode !== "discharge") slot.soc = soc;
+      }
       this._persist();
     });
     this._els.socSlider.addEventListener("change", () => {
-      if (this._selectedHour == null) return;
+      if (!this._hasSelection()) return;
       const now = new Date().getHours();
-      if (this._selectedHour === now) this._maybeApplySchedule(true);
+      if (this._selectedHours.has(now)) this._maybeApplySchedule(true);
     });
 
     this._els.socMinSlider.addEventListener("input", () => {
-      if (this._selectedHour == null) return;
-      const slot = this._schedule[this._selectedHour];
+      if (!this._hasSelection()) return;
       const soc = this._clampSoc(
         this._els.socMinSlider.value,
         this._defaultDischargeSoc()
       );
-      slot.soc_min = soc;
-      if (slot.mode === "discharge") slot.soc = soc;
       this._els.socMinSlider.value = String(soc);
       this._els.socMinValue.textContent = `${soc} %`;
+      for (const h of this._selectedHours) {
+        const slot = this._schedule[h];
+        slot.soc_min = soc;
+        if (slot.mode === "discharge") slot.soc = soc;
+      }
       this._persist();
     });
     this._els.socMinSlider.addEventListener("change", () => {
-      if (this._selectedHour == null) return;
+      if (!this._hasSelection()) return;
       const now = new Date().getHours();
-      if (this._selectedHour === now) this._maybeApplySchedule(true);
+      if (this._selectedHours.has(now)) this._maybeApplySchedule(true);
     });
 
     card.querySelectorAll("[data-action]").forEach((btn) => {
@@ -889,13 +903,18 @@ class AnkerScheduleCard extends HTMLElement {
             soc_max: this._defaultChargeSoc(),
             soc_min: this._defaultDischargeSoc(),
           }));
+          this._clearSelection();
           this._afterScheduleEdit();
         } else if (action === "all-off") {
           this._schedule = Array.from({ length: 24 }, () => this._defaultSlot());
-          this._selectedHour = null;
+          this._clearSelection();
           this._afterScheduleEdit();
         } else if (action === "apply-now") {
           this._onApplyNowClick();
+        } else if (action === "clear-selection") {
+          this._clearSelection();
+          this._syncChrome();
+          this._renderEditorPanel();
         }
       });
     });
@@ -922,6 +941,64 @@ class AnkerScheduleCard extends HTMLElement {
     this._maybeApplySchedule(true);
   }
 
+  _hasSelection() {
+    return (this._selectedHours?.size || 0) > 0;
+  }
+
+  _selectedList() {
+    return [...(this._selectedHours || [])].sort((a, b) => a - b);
+  }
+
+  _clearSelection() {
+    this._selectedHours = new Set();
+    this._activeMode = null;
+  }
+
+  /** Gemeenschappelijke modus van de selectie, of null bij gemengd/leeg. */
+  _selectionMode() {
+    const hours = this._selectedList();
+    if (!hours.length) return null;
+    if (this._activeMode && MODES.includes(this._activeMode)) {
+      if (hours.every((h) => this._schedule[h]?.mode === this._activeMode)) {
+        return this._activeMode;
+      }
+    }
+    const modes = new Set(hours.map((h) => this._schedule[h]?.mode));
+    return modes.size === 1 ? [...modes][0] : null;
+  }
+
+  _toggleHourSelection(h) {
+    if (!this._selectedHours) this._selectedHours = new Set();
+    if (this._selectedHours.has(h)) this._selectedHours.delete(h);
+    else this._selectedHours.add(h);
+    if (!this._hasSelection()) this._activeMode = null;
+    else if (
+      this._activeMode &&
+      ![...this._selectedHours].every(
+        (hour) => this._schedule[hour]?.mode === this._activeMode
+      )
+    ) {
+      this._activeMode = null;
+    }
+    this._syncChrome();
+    this._renderEditorPanel();
+  }
+
+  _assignModeToSelection(mode) {
+    if (!this._hasSelection() || !MODES.includes(mode)) return;
+    this._activeMode = mode;
+    const now = new Date().getHours();
+    let touchNow = false;
+    for (const h of this._selectedHours) {
+      this._applyModeToHour(h, mode);
+      if (h === now) touchNow = true;
+    }
+    this._persist();
+    this._syncChrome();
+    this._renderEditorPanel();
+    if (touchNow) this._maybeApplySchedule(true);
+  }
+
   _renderHours() {
     const root = this._els.hours;
     root.innerHTML = "";
@@ -935,9 +1012,8 @@ class AnkerScheduleCard extends HTMLElement {
         <span class="hour-tag"></span>
         <span class="hour-power"></span>
       `;
-      // Alleen bij echte klik/tap schilderen — niet bij hover of slepen.
       btn.addEventListener("click", () => {
-        this._applyBrush(h, this._brush, true);
+        this._toggleHourSelection(h);
       });
       root.appendChild(btn);
     }
@@ -958,7 +1034,7 @@ class AnkerScheduleCard extends HTMLElement {
       "mode-discharge"
     );
     btn.classList.add(`mode-${slot.mode}`);
-    btn.classList.toggle("selected", this._selectedHour === h);
+    btn.classList.toggle("selected", !!this._selectedHours?.has(h));
     const tags = {
       off: "—",
       nom: "NOM",
@@ -977,117 +1053,104 @@ class AnkerScheduleCard extends HTMLElement {
     }
   }
 
-  _applyBrush(hour, mode, select) {
+  _applyModeToHour(hour, mode) {
     if (hour < 0 || hour > 23 || !MODES.includes(mode)) return;
-    const prev = this._schedule[hour];
-    const fromPowerMode =
-      prev.mode === "charge" || prev.mode === "discharge";
-    const toPowerMode = mode === "charge" || mode === "discharge";
-    const keepPower =
-      toPowerMode && !fromPowerMode
-        ? this._defaultPower()
-        : Number.isFinite(Number(prev.power))
-          ? Number(prev.power)
-          : this._defaultPower();
-    const sameCharge = prev.mode === "charge" && mode === "charge";
-    const sameDischarge = prev.mode === "discharge" && mode === "discharge";
-    const sameNom = prev.mode === "nom" && mode === "nom";
-    const prevSocs = this._slotSocs(prev);
-    let socMax;
-    let socMin;
+    let socMax = 0;
+    let socMin = 0;
     if (mode === "nom") {
-      socMax = sameNom
-        ? prevSocs.socMax
-        : prev.mode === "charge"
-          ? prevSocs.socMax
-          : this._defaultChargeSoc();
-      socMin = sameNom
-        ? prevSocs.socMin
-        : prev.mode === "discharge"
-          ? prevSocs.socMin
-          : this._defaultDischargeSoc();
+      socMax = this._defaultChargeSoc();
+      socMin = this._defaultDischargeSoc();
     } else if (mode === "charge") {
-      socMax = sameCharge ? prevSocs.socMax : this._defaultChargeSoc();
-      socMin = 0;
+      socMax = this._defaultChargeSoc();
     } else if (mode === "discharge") {
-      socMax = 0;
-      socMin = sameDischarge ? prevSocs.socMin : this._defaultDischargeSoc();
-    } else {
-      socMax = 0;
-      socMin = 0;
+      socMin = this._defaultDischargeSoc();
     }
     this._schedule[hour] = {
       mode,
-      power: keepPower,
+      power: this._defaultPower(),
       soc: mode === "discharge" ? socMin : socMax,
       soc_max: socMax,
       soc_min: socMin,
     };
-    if (select) {
-      this._selectedHour = hour;
-    }
     this._updateHourButton(hour);
-    this._persist();
-    this._syncChrome();
-    this._renderEditorPanel();
-    const now = new Date().getHours();
-    if (hour === now) this._maybeApplySchedule(true);
   }
 
   _renderEditorPanel() {
     if (!this._els) return;
-    const h = this._selectedHour;
-    if (h == null || !this._schedule[h]) {
+    const hours = this._selectedList();
+    if (!hours.length) {
       this._els.editorPanel.classList.add("hidden");
       return;
     }
-    const slot = this._schedule[h];
-    this._els.editorPanel.classList.remove("hidden");
-    this._els.editorTitle.textContent = `Uur ${String(h).padStart(2, "0")}–${String(
-      (h + 1) % 24
-    ).padStart(2, "0")}`;
-    this._els.editorMode.textContent = this._modeLabel(slot.mode);
-    this._els.editorMode.dataset.mode = slot.mode;
 
-    const needsPower = slot.mode === "charge" || slot.mode === "discharge";
+    const mode = this._selectionMode();
+    this._els.editorPanel.classList.remove("hidden");
+
+    if (hours.length === 1) {
+      const h = hours[0];
+      this._els.editorTitle.textContent = `Uur ${String(h).padStart(2, "0")}–${String(
+        (h + 1) % 24
+      ).padStart(2, "0")}`;
+    } else {
+      this._els.editorTitle.textContent = `${hours.length} uren geselecteerd`;
+    }
+
+    if (!mode) {
+      this._els.editorMode.textContent = "Kies een modus";
+      this._els.editorMode.dataset.mode = "";
+      this._els.powerWrap.classList.add("hidden");
+      this._els.socWrap?.classList.add("hidden");
+      this._els.socMinWrap?.classList.add("hidden");
+      return;
+    }
+
+    const slot = this._schedule[hours[0]];
+    this._els.editorMode.textContent = this._modeLabel(mode);
+    this._els.editorMode.dataset.mode = mode;
+
+    const needsPower = mode === "charge" || mode === "discharge";
+    const isNom = mode === "nom";
+    const showSoc = this._showSoc() && (needsPower || isNom);
+    const showMax = showSoc && (mode === "charge" || isNom);
+    const showMin = showSoc && (mode === "discharge" || isNom);
+
     this._els.powerWrap.classList.toggle("hidden", !needsPower);
     if (needsPower) {
       this._syncPowerLimits();
       const power = this._snapPower(slot.power);
-      this._schedule[h].power = power;
+      for (const h of hours) this._schedule[h].power = power;
       this._els.powerSlider.value = String(power);
       this._els.powerValue.textContent = `${Math.round(power)} W`;
     }
 
-    const showSoc = this._showSoc() && (
-      slot.mode === "charge" ||
-      slot.mode === "discharge" ||
-      slot.mode === "nom"
-    );
-    const showMax =
-      showSoc && (slot.mode === "charge" || slot.mode === "nom");
-    const showMin =
-      showSoc && (slot.mode === "discharge" || slot.mode === "nom");
     const { socMax, socMin } = this._slotSocs(slot);
-    this._schedule[h].soc_max = socMax;
-    this._schedule[h].soc_min = socMin;
-    this._schedule[h].soc =
-      slot.mode === "discharge" ? socMin : socMax;
-
     this._els.socWrap?.classList.toggle("hidden", !showMax);
+    this._els.socMinWrap?.classList.toggle("hidden", !showMin);
+
     if (showMax) {
+      for (const h of hours) {
+        this._schedule[h].soc_max = socMax;
+        if (this._schedule[h].mode !== "discharge") this._schedule[h].soc = socMax;
+      }
       this._els.socSlider.value = String(socMax);
       this._els.socValue.textContent = `${socMax} %`;
       this._els.socLabel.textContent = "Max SOC";
-      this._els.socSlider.style.accentColor = this._config.colors.charge;
+      this._els.socSlider.style.accentColor = isNom
+        ? this._config.colors.nom
+        : this._config.colors.charge;
     }
 
-    this._els.socMinWrap?.classList.toggle("hidden", !showMin);
     if (showMin) {
+      for (const h of hours) {
+        this._schedule[h].soc_min = socMin;
+        if (this._schedule[h].mode === "discharge") this._schedule[h].soc = socMin;
+      }
       this._els.socMinSlider.value = String(socMin);
       this._els.socMinValue.textContent = `${socMin} %`;
       this._els.socMinLabel.textContent = "Min SOC";
-      this._els.socMinSlider.style.accentColor = this._config.colors.discharge;
+      this._els.socMinSlider.style.accentColor = isNom
+        ? this._config.colors.nom
+        : this._config.colors.discharge;
     }
   }
 
@@ -1160,9 +1223,26 @@ class AnkerScheduleCard extends HTMLElement {
     this._els.toggleLabel.textContent = this._enabled ? "AAN" : "UIT";
     this._els.screen.classList.toggle("scheduler-off", !this._enabled);
 
+    this._hourButtons?.forEach((_, h) => this._updateHourButton(h));
+
+    const armed = this._hasSelection();
+    this._els.brushRow?.classList.toggle("has-selection", armed);
     this._els.brushes.forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.brush === this._brush);
+      btn.disabled = !armed;
+      btn.classList.toggle("is-muted", !armed);
+      btn.classList.toggle(
+        "active",
+        armed && btn.dataset.brush === this._activeMode
+      );
     });
+
+    const count = this._selectedHours?.size || 0;
+    if (this._els.selectionCount) {
+      this._els.selectionCount.textContent =
+        count === 1 ? "1 geselecteerd" : `${count} geselecteerd`;
+      this._els.selectionCount.classList.toggle("has-selection", count > 0);
+    }
+    this._els.selectionClear?.classList.toggle("hidden", count === 0);
 
     this._updateNextMode();
   }
@@ -1572,26 +1652,45 @@ class AnkerScheduleCard extends HTMLElement {
         background: rgba(255,255,255,0.04); color: #9fc4d6;
         border-radius: 8px; padding: 8px 2px; cursor: pointer;
         font-size: 11px; letter-spacing: 0.3px;
+        transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+      .brush.is-muted,
+      .brush:disabled {
+        color: #5f7380;
+        border-color: rgba(255,255,255,0.05);
+        background: rgba(255,255,255,0.02);
+        box-shadow: none;
+        opacity: 0.45;
+        cursor: default;
+      }
+      .brush-row.has-selection .brush:not(:disabled) {
+        opacity: 1;
+        cursor: pointer;
       }
       .brush[data-brush="nom"].active {
         color: #eaffef; border-color: rgba(27,138,58,0.85);
         background: rgba(27,138,58,0.28); box-shadow: 0 0 10px rgba(27,138,58,0.35);
+        opacity: 1;
       }
       .brush[data-brush="nom_o"].active {
         color: #eafffa; border-color: rgba(0,229,192,0.9);
         background: rgba(0,229,192,0.22); box-shadow: 0 0 12px rgba(0,229,192,0.4);
+        opacity: 1;
       }
       .brush[data-brush="charge"].active {
         color: #eaf6ff; border-color: rgba(63,182,255,0.65);
         background: rgba(63,182,255,0.2); box-shadow: 0 0 10px rgba(63,182,255,0.25);
+        opacity: 1;
       }
       .brush[data-brush="discharge"].active {
         color: #fff3e0; border-color: rgba(255,152,0,0.65);
         background: rgba(255,152,0,0.2); box-shadow: 0 0 10px rgba(255,152,0,0.25);
+        opacity: 1;
       }
       .brush[data-brush="off"].active {
         color: #d8e6ee; border-color: rgba(255,255,255,0.28);
         background: rgba(255,255,255,0.1);
+        opacity: 1;
       }
       .hours {
         display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px;
@@ -1644,7 +1743,16 @@ class AnkerScheduleCard extends HTMLElement {
         outline-offset: 1px;
         box-shadow: 0 0 12px rgba(234,246,255,0.55);
       }
-      .hour.selected { outline: 2px solid rgba(63,182,255,1); outline-offset: 1px; }
+      .hour.selected {
+        outline: 2px solid rgba(63,182,255,1);
+        outline-offset: 1px;
+      }
+      .hour.current.selected {
+        outline: 3px solid var(--color-current);
+        box-shadow:
+          0 0 0 2px rgba(63,182,255,0.85),
+          0 0 12px rgba(234,246,255,0.55);
+      }
       .screen.scheduler-off .hour.mode-nom,
       .screen.scheduler-off .hour.mode-nom_o,
       .screen.scheduler-off .hour.mode-charge,
@@ -1696,6 +1804,22 @@ class AnkerScheduleCard extends HTMLElement {
       .actions button:hover {
         background: rgba(63,182,255,0.16); border-color: rgba(63,182,255,0.5);
       }
+      .footer-bar {
+        display: flex; justify-content: flex-end; align-items: center;
+        gap: 12px; margin-top: 10px; min-height: 22px;
+      }
+      .selection-count {
+        color: #6a8490; font-size: 11px; letter-spacing: 0.4px;
+        font-variant-numeric: tabular-nums;
+      }
+      .selection-count.has-selection { color: #eaf6ff; }
+      .selection-clear {
+        appearance: none; border: none; background: transparent;
+        color: #7fa6b8; font-size: 11px; cursor: pointer; padding: 0;
+        text-decoration: underline; text-underline-offset: 2px;
+      }
+      .selection-clear:hover { color: #eaf6ff; }
+      .selection-clear.hidden { display: none; }
       .actions button:disabled { opacity: 0.75; cursor: default; }
       .actions button.apply-now-btn.is-busy {
         border-color: rgba(63,182,255,0.65);
