@@ -238,8 +238,17 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def _async_hourly_tick(self, _now: datetime) -> None:
-        # Uurwisseling: één keer toepassen (ook UIT → stand-by).
-        self.hass.async_create_task(self.async_apply_schedule(force=True))
+        # Uurwisseling: toepassen. Zelfde modus als vorig uur → geen force
+        # (modus loopt door; alleen power/SOC-delta of drift wordt gezet).
+        hour = dt_util.now().hour
+        hours = self.data.get("hours") or []
+        force = True
+        if len(hours) >= 24:
+            prev_mode = hours[(hour - 1) % 24].get("mode")
+            cur_mode = hours[hour].get("mode")
+            if prev_mode == cur_mode and cur_mode != MODE_OFF:
+                force = False
+        self.hass.async_create_task(self.async_apply_schedule(force=force))
 
     def _refresh_schedule_from_entry(self) -> None:
         """Herlees compact schema uit config entry vóór elke minuutcontrole."""
@@ -549,8 +558,12 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         mode = slot["mode"]
         power = int(slot["power"])
         key = f"{hour}:{mode}:{power}:{soc_max}:{soc_min}"
-        mode_key = f"{hour}:{mode}"
-        transition = self._last_mode_key != mode_key
+        # Alleen echte moduswissel (niet louter uurwissel bij dezelfde modus).
+        transition = self._last_mode_key != mode
+        hours = self.data.get("hours") or []
+        prev_mode = (
+            hours[(hour - 1) % 24].get("mode") if len(hours) >= 24 else None
+        )
         matches_live = self._slot_matches_live(
             mode=mode,
             mode_entity=mode_entity,
@@ -562,6 +575,40 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             charge_soc_entity=charge_soc_entity,
             discharge_soc_entity=discharge_soc_entity,
         )
+        # NOM→NOM / NOM-O→NOM-O / laden→laden: modus loopt door.
+        # Geen mode-select/settle/verify; hooguit power/SOC-delta (setters
+        # schrijven zelf niets als de waarde al klopt).
+        if (
+            prev_mode == mode
+            and mode != MODE_OFF
+            and matches_live
+            and self._last_mode_key == mode
+        ):
+            try:
+                if mode == MODE_NOM:
+                    await self._async_set_number(charge_soc_entity, soc_max)
+                    await self._async_set_number(discharge_soc_entity, soc_min)
+                elif mode in (MODE_CHARGE, MODE_DISCHARGE):
+                    await self._async_set_power(power_entity, power)
+                    await self._async_set_number(
+                        charge_soc_entity
+                        if mode == MODE_CHARGE
+                        else discharge_soc_entity,
+                        soc_max if mode == MODE_CHARGE else soc_min,
+                    )
+                self._last_applied_key = key
+                _LOGGER.debug(
+                    "Anker Schedule uur %s: modus %s blijft gelijk — geen mode-apply",
+                    hour,
+                    mode,
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.debug(
+                    "Anker Schedule doorlopende modus bijwerken mislukt",
+                    exc_info=True,
+                )
+            return
+
         if (
             not force
             and self._last_applied_key == key
@@ -577,7 +624,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         if not matches_live and self._last_applied_key == key:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Anker Schedule: live-modus wijkt af van schema (%s) — herstel",
                 key,
             )
@@ -616,16 +663,20 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif mode in (MODE_CHARGE, MODE_DISCHARGE):
                 self._cancel_verify()
                 # Eerst externe modus, dan 2s wachten tot laad/ontlaadregeling
-                # beschikbaar is, daarna richting en pas daarna vermogen.
-                await self._async_select_option(
-                    mode_entity,
-                    str(
-                        self._cfg(
-                            CONF_THIRD_PARTY_OPTION, DEFAULT_THIRD_PARTY_OPTION
-                        )
-                    ),
+                # beschikbaar is — alleen als we de modus echt wisselen.
+                third_party = str(
+                    self._cfg(
+                        CONF_THIRD_PARTY_OPTION, DEFAULT_THIRD_PARTY_OPTION
+                    )
                 )
-                await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
+                third_wanted = self._resolve_option(mode_entity, third_party)
+                needs_settle = (
+                    third_wanted is None
+                    or self._select_value(mode_entity) != third_wanted
+                )
+                await self._async_select_option(mode_entity, third_party)
+                if needs_settle:
+                    await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
                 # Uur kan tijdens de sleep gewisseld zijn — niet doorzetten.
                 if dt_util.now().hour != hour:
                     _LOGGER.info(
@@ -650,7 +701,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     soc_max if mode == MODE_CHARGE else soc_min,
                 )
             self._last_applied_key = key
-            self._last_mode_key = mode_key
+            self._last_mode_key = mode
             _LOGGER.debug("Anker schedule toegepast: %s", key)
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Anker schedule toepassen mislukt")
