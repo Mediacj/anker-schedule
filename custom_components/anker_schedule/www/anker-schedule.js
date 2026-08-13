@@ -15,7 +15,7 @@ const TAG = "anker-schedule";
 const EDITOR = "anker-schedule-editor";
 const INNER = "anker-schedule-inner";
 const EDITOR_INNER = "anker-schedule-editor-inner";
-const VERSION = "1.0.25";
+const VERSION = "1.0.26";
 const CARD_URL = new URL(
   `./anker-schedule-card.js?v=${VERSION}`,
   import.meta.url

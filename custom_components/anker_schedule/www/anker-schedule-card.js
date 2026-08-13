@@ -3,7 +3,7 @@
  * Do not register this file as a Lovelace resource; use the stub instead.
  */
 
-const CARD_VERSION = "1.0.25";
+const CARD_VERSION = "1.0.26";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -122,6 +122,9 @@ class AnkerScheduleCard extends HTMLElement {
       this._enabled =
         this._loadEnabled() ??
         (this._config.enabled !== undefined ? !!this._config.enabled : true);
+      this._savedScheduleSig = this._scheduleSignature();
+      this._dirty = false;
+      this._localEditPending = false;
 
       if (!this._built) {
         this._buildDom();
@@ -476,6 +479,32 @@ class AnkerScheduleCard extends HTMLElement {
     this._queueStorageWrite();
   }
 
+  /** Alleen schema (geen enabled) — voor dirty-detectie. */
+  _scheduleSignature() {
+    if (!this._schedule) return "";
+    return this._serializeCompact().replace(/^e=[01];/, "");
+  }
+
+  _refreshDirty() {
+    const sig = this._scheduleSignature();
+    this._dirty = sig !== (this._savedScheduleSig || "");
+    this._localEditPending = !!this._dirty;
+  }
+
+  /** Lokale schema-wijziging: nog niet opslaan/toepassen tot OK. */
+  _stageScheduleChange() {
+    this._refreshDirty();
+    this._renderHours();
+    this._syncChrome();
+    this._renderEditorPanel();
+  }
+
+  _captureSavedSchedule() {
+    this._savedScheduleSig = this._scheduleSignature();
+    this._dirty = false;
+    this._localEditPending = false;
+  }
+
   /** Compact format: e=1;m=oonxc...;p=0,0,500,...;s=100,10,100/10,... */
   _serializeCompact() {
     const m = this._schedule
@@ -619,7 +648,6 @@ class AnkerScheduleCard extends HTMLElement {
     if (!parsed) return;
     this._lastStorageRaw = raw;
     this._storageSynced = true;
-    this._localEditPending = false;
     this._schedule = parsed.hours;
     this._enabled = parsed.enabled;
     try {
@@ -634,6 +662,7 @@ class AnkerScheduleCard extends HTMLElement {
     } catch (_e) {
       /* ignore */
     }
+    this._captureSavedSchedule();
     this._renderHours();
     this._syncChrome();
     this._renderEditorPanel();
@@ -771,11 +800,10 @@ class AnkerScheduleCard extends HTMLElement {
             <div class="actions">
               <button type="button" data-action="all-nom">Alles NOM</button>
               <button type="button" data-action="all-off">Alles uit</button>
-              <button type="button" class="apply-now-btn" data-action="apply-now">Nu toepassen</button>
+              <button type="button" class="ok-btn hidden" data-action="save-ok">OK</button>
             </div>
             <div class="footer-bar">
               <button type="button" class="selection-clear hidden" data-action="clear-selection">Wis selectie</button>
-              <span class="selection-count" aria-live="polite">0 geselecteerd</span>
             </div>
           </div>
 
@@ -814,9 +842,8 @@ class AnkerScheduleCard extends HTMLElement {
       socMinSlider: card.querySelector(".soc-min-slider"),
       socMinLabel: card.querySelector(".soc-min-label"),
       socMinValue: card.querySelector(".soc-min-value"),
-      applyBtn: card.querySelector(".apply-now-btn"),
+      applyBtn: card.querySelector(".ok-btn"),
       brushRow: card.querySelector(".brush-row"),
-      selectionCount: card.querySelector(".selection-count"),
       selectionClear: card.querySelector(".selection-clear"),
     };
 
@@ -842,12 +869,7 @@ class AnkerScheduleCard extends HTMLElement {
         this._schedule[h].power = power;
         this._updateHourButton(h);
       }
-      this._persist();
-    });
-    this._els.powerSlider.addEventListener("change", () => {
-      if (!this._hasSelection()) return;
-      const now = new Date().getHours();
-      if (this._selectedHours.has(now)) this._maybeApplySchedule(true);
+      this._stageScheduleChange();
     });
 
     this._els.socSlider.addEventListener("input", () => {
@@ -863,12 +885,7 @@ class AnkerScheduleCard extends HTMLElement {
         slot.soc_max = soc;
         if (slot.mode !== "discharge") slot.soc = soc;
       }
-      this._persist();
-    });
-    this._els.socSlider.addEventListener("change", () => {
-      if (!this._hasSelection()) return;
-      const now = new Date().getHours();
-      if (this._selectedHours.has(now)) this._maybeApplySchedule(true);
+      this._stageScheduleChange();
     });
 
     this._els.socMinSlider.addEventListener("input", () => {
@@ -884,12 +901,7 @@ class AnkerScheduleCard extends HTMLElement {
         slot.soc_min = soc;
         if (slot.mode === "discharge") slot.soc = soc;
       }
-      this._persist();
-    });
-    this._els.socMinSlider.addEventListener("change", () => {
-      if (!this._hasSelection()) return;
-      const now = new Date().getHours();
-      if (this._selectedHours.has(now)) this._maybeApplySchedule(true);
+      this._stageScheduleChange();
     });
 
     card.querySelectorAll("[data-action]").forEach((btn) => {
@@ -905,13 +917,13 @@ class AnkerScheduleCard extends HTMLElement {
             soc_min: this._defaultDischargeSoc(),
           }));
           this._clearSelection();
-          this._afterScheduleEdit();
+          this._stageScheduleChange();
         } else if (action === "all-off") {
           this._schedule = Array.from({ length: 24 }, () => this._defaultSlot());
           this._clearSelection();
-          this._afterScheduleEdit();
-        } else if (action === "apply-now") {
-          this._onApplyNowClick();
+          this._stageScheduleChange();
+        } else if (action === "save-ok") {
+          this._onOkClick();
         } else if (action === "clear-selection") {
           this._clearSelection();
           this._syncChrome();
@@ -935,11 +947,7 @@ class AnkerScheduleCard extends HTMLElement {
   }
 
   _afterScheduleEdit() {
-    this._persist();
-    this._renderHours();
-    this._syncChrome();
-    this._renderEditorPanel();
-    this._maybeApplySchedule(true);
+    this._stageScheduleChange();
   }
 
   _hasSelection() {
@@ -988,16 +996,10 @@ class AnkerScheduleCard extends HTMLElement {
   _assignModeToSelection(mode) {
     if (!this._hasSelection() || !MODES.includes(mode)) return;
     this._activeMode = mode;
-    const now = new Date().getHours();
-    let touchNow = false;
     for (const h of this._selectedHours) {
       this._applyModeToHour(h, mode);
-      if (h === now) touchNow = true;
     }
-    this._persist();
-    this._syncChrome();
-    this._renderEditorPanel();
-    if (touchNow) this._maybeApplySchedule(true);
+    this._stageScheduleChange();
   }
 
   _renderHours() {
@@ -1089,11 +1091,11 @@ class AnkerScheduleCard extends HTMLElement {
 
     if (hours.length === 1) {
       const h = hours[0];
-      this._els.editorTitle.textContent = `Uur ${String(h).padStart(2, "0")}–${String(
+      this._els.editorTitle.innerHTML = `Uur ${String(h).padStart(2, "0")}–${String(
         (h + 1) % 24
       ).padStart(2, "0")}`;
     } else {
-      this._els.editorTitle.textContent = `${hours.length} uren geselecteerd`;
+      this._els.editorTitle.innerHTML = `<strong>${hours.length} uren geselecteerd</strong>`;
     }
 
     if (!mode) {
@@ -1237,13 +1239,9 @@ class AnkerScheduleCard extends HTMLElement {
       );
     });
 
-    const count = this._selectedHours?.size || 0;
-    if (this._els.selectionCount) {
-      this._els.selectionCount.textContent =
-        count === 1 ? "1 geselecteerd" : `${count} geselecteerd`;
-      this._els.selectionCount.classList.toggle("has-selection", count > 0);
-    }
-    this._els.selectionClear?.classList.toggle("hidden", count === 0);
+    this._refreshDirty();
+    this._els.applyBtn?.classList.toggle("hidden", !this._dirty);
+    this._els.selectionClear?.classList.toggle("hidden", !armed);
 
     this._updateNextMode();
   }
@@ -1387,44 +1385,48 @@ class AnkerScheduleCard extends HTMLElement {
     });
   }
 
-  async _onApplyNowClick() {
-    if (this._applyBusy) return;
+  async _onOkClick() {
+    if (this._applyBusy || !this._dirty) return;
     this._applyBusy = true;
     const btn = this._els?.applyBtn;
     if (btn) {
       btn.disabled = true;
       btn.classList.remove("is-ok", "is-error");
       btn.classList.add("is-busy");
-      btn.textContent = "…";
     }
 
+    let ok = false;
     try {
       this._persist();
       this._flushStorageWrite();
-      const result = await this._maybeApplySchedule(true, true);
-      const ok = result?.ok !== false;
-      if (btn) {
-        btn.classList.remove("is-busy");
-        btn.classList.add(ok ? "is-ok" : "is-error");
-        btn.textContent = ok ? "✓" : "!";
+      // Met storage past de backend toe via text.set_value — geen client-apply.
+      if (!this._storageEntityId()) {
+        const result = await this._maybeApplySchedule(true, true);
+        ok = result?.ok !== false;
+      } else {
+        ok = true;
       }
+      if (ok) this._captureSavedSchedule();
     } catch (err) {
-      console.error("Anker Schedule Card: apply-now failed", err);
-      if (btn) {
-        btn.classList.remove("is-busy");
-        btn.classList.add("is-error");
-        btn.textContent = "!";
-      }
-    } finally {
-      window.setTimeout(() => {
-        if (btn) {
-          btn.disabled = false;
-          btn.classList.remove("is-busy", "is-ok", "is-error");
-          btn.textContent = "Nu toepassen";
-        }
-        this._applyBusy = false;
-      }, 1200);
+      console.error("Anker Schedule Card: OK opslaan mislukt", err);
+      ok = false;
     }
+
+    if (btn) {
+      btn.classList.remove("is-busy");
+      btn.classList.add(ok ? "is-ok" : "is-error");
+      btn.textContent = ok ? "✓" : "✗";
+    }
+
+    window.setTimeout(() => {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("is-busy", "is-ok", "is-error");
+        btn.textContent = "OK";
+      }
+      this._applyBusy = false;
+      this._syncChrome();
+    }, 900);
   }
 
   _previousSlotWasPower(hour) {
@@ -1827,31 +1829,26 @@ class AnkerScheduleCard extends HTMLElement {
         background: rgba(63,182,255,0.16); border-color: rgba(63,182,255,0.5);
       }
       .actions button:disabled { opacity: 0.75; cursor: default; }
-      .actions button.apply-now-btn.is-busy {
+      .actions button.ok-btn.is-busy {
         border-color: rgba(63,182,255,0.65);
         background: rgba(63,182,255,0.18);
       }
-      .actions button.apply-now-btn.is-ok {
+      .actions button.ok-btn.is-ok {
         border-color: rgba(76,175,80,0.7);
         background: rgba(76,175,80,0.22);
         color: #eaffef;
       }
-      .actions button.apply-now-btn.is-error {
+      .actions button.ok-btn.is-error {
         border-color: rgba(244,67,54,0.7);
         background: rgba(244,67,54,0.18);
         color: #ffebee;
       }
+      .actions button.ok-btn.hidden { display: none; }
       .footer-bar {
         display: flex; flex-direction: column; align-items: flex-end;
         gap: 8px; margin-top: 0; flex-shrink: 0;
       }
       .selection-clear.hidden { display: none; }
-      .selection-count {
-        color: #7fa6b8; font-size: 15px; font-weight: 600;
-        letter-spacing: 0.5px; font-variant-numeric: tabular-nums;
-        text-align: right;
-      }
-      .selection-count.has-selection { color: #eaf6ff; }
       .next-mode-value[data-mode="nom"] { color: var(--color-nom); }
       .next-mode-value[data-mode="nom_o"] { color: var(--color-nom-o); }
       .next-mode-value[data-mode="charge"] { color: var(--color-charge); }
