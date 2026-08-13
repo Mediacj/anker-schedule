@@ -3,7 +3,7 @@
  * Do not register this file as a Lovelace resource; use the stub instead.
  */
 
-const CARD_VERSION = "1.0.22";
+const CARD_VERSION = "1.0.23";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -775,7 +775,7 @@ class AnkerScheduleCard extends HTMLElement {
 
           <div class="footer-bar">
             <button type="button" class="selection-clear hidden" data-action="clear-selection">Wis selectie</button>
-            <span class="selection-count" aria-live="polite">0 geselecteerd</span>
+            <div class="selection-count" aria-live="polite">0 geselecteerd</div>
           </div>
 
         </div>
@@ -1656,15 +1656,15 @@ class AnkerScheduleCard extends HTMLElement {
       }
       .brush.is-muted,
       .brush:disabled {
+        /* Rand/achtergrond blijven zichtbaar; alleen de tekst uitgrijzen. */
         color: #5f7380;
-        border-color: rgba(255,255,255,0.05);
-        background: rgba(255,255,255,0.02);
+        border-color: rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.04);
         box-shadow: none;
-        opacity: 0.45;
+        opacity: 1;
         cursor: default;
       }
       .brush-row.has-selection .brush:not(:disabled) {
-        opacity: 1;
         cursor: pointer;
       }
       .brush[data-brush="nom"].active {
@@ -1805,21 +1805,24 @@ class AnkerScheduleCard extends HTMLElement {
         background: rgba(63,182,255,0.16); border-color: rgba(63,182,255,0.5);
       }
       .footer-bar {
-        display: flex; justify-content: flex-end; align-items: center;
-        gap: 12px; margin-top: 10px; min-height: 22px;
+        display: flex; flex-direction: column; align-items: flex-end;
+        gap: 6px; margin-top: 12px; min-height: 28px;
       }
+      .selection-clear {
+        appearance: none; border: 1px solid rgba(63,182,255,0.28);
+        background: rgba(63,182,255,0.08); color: #d8e6ee;
+        border-radius: 8px; padding: 7px 12px; font-size: 12px; cursor: pointer;
+      }
+      .selection-clear:hover {
+        background: rgba(63,182,255,0.16); border-color: rgba(63,182,255,0.5);
+      }
+      .selection-clear.hidden { display: none; }
       .selection-count {
-        color: #6a8490; font-size: 11px; letter-spacing: 0.4px;
-        font-variant-numeric: tabular-nums;
+        color: #6a8490; font-size: 14px; font-weight: 600;
+        letter-spacing: 0.3px; font-variant-numeric: tabular-nums;
+        line-height: 1.2;
       }
       .selection-count.has-selection { color: #eaf6ff; }
-      .selection-clear {
-        appearance: none; border: none; background: transparent;
-        color: #7fa6b8; font-size: 11px; cursor: pointer; padding: 0;
-        text-decoration: underline; text-underline-offset: 2px;
-      }
-      .selection-clear:hover { color: #eaf6ff; }
-      .selection-clear.hidden { display: none; }
       .actions button:disabled { opacity: 0.75; cursor: default; }
       .actions button.apply-now-btn.is-busy {
         border-color: rgba(63,182,255,0.65);
