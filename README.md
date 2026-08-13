@@ -39,16 +39,13 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / NOM-O / 
    - Min SOC ontladen (optioneel, bijv. `number.*_ontladingslimiet`)
    - NOM-O switch (standaard `switch.anker_nom`)
 
-De card wordt automatisch geladen via `/local/anker-schedule/anker-schedule.js` (stub; laadt daarna `anker-schedule-card.js`).
+De card wordt automatisch geladen via `/local/anker-schedule/anker-schedule.js`.
 
 ## Dashboard card
 
-### Entities in de card-YAML?
+### Entities
 
-Bij normaal gebruik via de integratie hoef je **geen** entities in de card-YAML te zetten.
-
-- **Integratie-config** (bij installeren/opties) is de bron. Daar staan de entities die elk uur door de backend worden aangestuurd.
-- **Card-YAML** is optioneel: alleen als je daar een entity invult, gebruikt de card die waarde. Lege velden worden automatisch uit de integratie gehaald (via de schema-text-entity).
+Entities komen **alleen** uit de integratieconfiguratie (bij installeren/opties). Zet ze niet in de card-YAML — oude entity-velden worden bij openen van de editor opgeschoond.
 
 Minimaal is dus genoeg:
 
@@ -57,9 +54,7 @@ type: custom:anker-schedule
 title: ANKER PLANNER
 ```
 
-Entities in de YAML zijn alleen nodig als je bewust iets anders wilt dan de integratie-config, of als je de card zonder integratie gebruikt.
-
-Volledig voorbeeld (alle overrides optioneel):
+Voorbeeld met optionele UI-overrides:
 
 ```yaml
 type: custom:anker-schedule
@@ -68,13 +63,6 @@ nom_o_label: NOM-O
 nom_o_tag: N-O
 enabled: true
 auto_apply: false
-entity: select.anker_solix_device_bedrijfsmodus_apparaat_werkt_in_externe_modus
-direction_entity: select.anker_solix_device_laad_ontlaadregeling
-power_entity: number.anker_solix_device_ingestelde_laad_ontlaadvermogen
-charge_soc_entity: number.garage_anker_solix_device_192_168_1_41_maximale_laadlimiet
-discharge_soc_entity: number.garage_anker_solix_device_192_168_1_41_ontladingslimiet
-nom_switch_entity: switch.anker_nom
-storage_entity: text.anker_schedule_schema
 nom_option: "0"
 third_party_option: "3"
 charge_option: "0"
@@ -96,6 +84,8 @@ colors:
   idle: "#7fa6b8"
 ```
 
+Entities (bedrijfsmodus, vermogen, SOC, NOM-switch, schema) komen uitsluitend uit de **integratieconfiguratie**, niet uit de card-YAML.
+
 Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pickers).
 
 ### Card YAML-velden
@@ -107,13 +97,6 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | `nom_o_tag` | string | `N-O` | Eigen tekst op de NOM-O-uurtegels; maximaal 3 tekens, langer wordt afgekapt |
 | `enabled` | bool | `true` | Startwaarde planner aan/uit |
 | `auto_apply` | bool | `false`* | Client-side toepassen; bij integratie-storage normaal niet nodig |
-| `entity` | entity_id | *(uit integratie)* | Bedrijfsmodus-select |
-| `direction_entity` | entity_id | *(uit integratie)* | Laad/ontlaadregeling |
-| `power_entity` | entity_id | *(uit integratie)* | Vermogen number |
-| `charge_soc_entity` | entity_id | *(uit integratie)* | Number voor max SOC bij laden |
-| `discharge_soc_entity` | entity_id | *(uit integratie)* | Number voor min SOC bij ontladen |
-| `nom_switch_entity` | entity_id | `switch.anker_nom` | NOM-O switch |
-| `storage_entity` | entity_id | *(auto)* | Text/input_text met compact schema |
 | `nom_option` | string | `0` | Option voor NOM / self_consumption |
 | `third_party_option` | string | `3` | Option voor externe modus |
 | `charge_option` | string | `0` | Richting laden |
@@ -133,10 +116,10 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | `colors.current` | hex | `#eaf6ff` | Accent huidig uur |
 | `colors.idle` | hex | `#7fa6b8` | Kleur uit/idle |
 
-De moduskleuren bepalen niet alleen de legenda, maar ook de vulling, rand en gloed van de uurtegels. Rand, gloed en tekstkleur worden automatisch uit de gekozen kleur afgeleid. NOM-O krijgt bewust een lichte vulling met donkere tekst, zodat die tegels zich onderscheiden van NOM.
+De moduskleuren bepalen de legenda én de **exacte achtergrondkleur** van de uurtegels (zoals in de color pickers).
 
 
-\* `auto_apply` is impliciet `false` zodra er een `storage_entity` (of auto-discovered schema-text) is.
+\* `auto_apply` is impliciet `false` zodra de integratie-schema-entity beschikbaar is.
 
 ## Entities (integratie)
 
