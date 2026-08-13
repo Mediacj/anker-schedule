@@ -3,7 +3,7 @@
  * Do not register this file as a Lovelace resource; use the stub instead.
  */
 
-const CARD_VERSION = "1.0.23";
+const CARD_VERSION = "1.0.24";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -771,10 +771,10 @@ class AnkerScheduleCard extends HTMLElement {
             <button type="button" data-action="all-nom">Alles NOM</button>
             <button type="button" data-action="all-off">Alles uit</button>
             <button type="button" class="apply-now-btn" data-action="apply-now">Nu toepassen</button>
+            <button type="button" class="selection-clear hidden" data-action="clear-selection">Wis selectie</button>
           </div>
 
           <div class="footer-bar">
-            <button type="button" class="selection-clear hidden" data-action="clear-selection">Wis selectie</button>
             <div class="selection-count" aria-live="polite">0 geselecteerd</div>
           </div>
 
@@ -1651,46 +1651,54 @@ class AnkerScheduleCard extends HTMLElement {
         appearance: none; border: 1px solid rgba(255,255,255,0.1);
         background: rgba(255,255,255,0.04); color: #9fc4d6;
         border-radius: 8px; padding: 8px 2px; cursor: pointer;
-        font-size: 11px; letter-spacing: 0.3px;
-        transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        font-size: 11px; letter-spacing: 0.3px; font-weight: 500;
+        transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       }
       .brush.is-muted,
       .brush:disabled {
-        /* Rand/achtergrond blijven zichtbaar; alleen de tekst uitgrijzen. */
-        color: #5f7380;
+        /* Rand blijft; tekst duidelijk gedempt. */
+        color: #455560;
         border-color: rgba(255,255,255,0.14);
         background: rgba(255,255,255,0.04);
         box-shadow: none;
-        opacity: 1;
+        font-weight: 500;
         cursor: default;
       }
       .brush-row.has-selection .brush:not(:disabled) {
         cursor: pointer;
+        color: #f2f8ff;
+        font-weight: 700;
+        text-shadow: 0 0 8px rgba(234,246,255,0.35);
       }
       .brush[data-brush="nom"].active {
-        color: #eaffef; border-color: rgba(27,138,58,0.85);
+        color: #ffffff; font-weight: 800;
+        text-shadow: 0 0 10px rgba(234,255,239,0.55);
+        border-color: rgba(27,138,58,0.85);
         background: rgba(27,138,58,0.28); box-shadow: 0 0 10px rgba(27,138,58,0.35);
-        opacity: 1;
       }
       .brush[data-brush="nom_o"].active {
-        color: #eafffa; border-color: rgba(0,229,192,0.9);
+        color: #ffffff; font-weight: 800;
+        text-shadow: 0 0 10px rgba(0,229,192,0.55);
+        border-color: rgba(0,229,192,0.9);
         background: rgba(0,229,192,0.22); box-shadow: 0 0 12px rgba(0,229,192,0.4);
-        opacity: 1;
       }
       .brush[data-brush="charge"].active {
-        color: #eaf6ff; border-color: rgba(63,182,255,0.65);
+        color: #ffffff; font-weight: 800;
+        text-shadow: 0 0 10px rgba(63,182,255,0.55);
+        border-color: rgba(63,182,255,0.65);
         background: rgba(63,182,255,0.2); box-shadow: 0 0 10px rgba(63,182,255,0.25);
-        opacity: 1;
       }
       .brush[data-brush="discharge"].active {
-        color: #fff3e0; border-color: rgba(255,152,0,0.65);
+        color: #ffffff; font-weight: 800;
+        text-shadow: 0 0 10px rgba(255,152,0,0.5);
+        border-color: rgba(255,152,0,0.65);
         background: rgba(255,152,0,0.2); box-shadow: 0 0 10px rgba(255,152,0,0.25);
-        opacity: 1;
       }
       .brush[data-brush="off"].active {
-        color: #d8e6ee; border-color: rgba(255,255,255,0.28);
+        color: #ffffff; font-weight: 800;
+        text-shadow: 0 0 8px rgba(234,246,255,0.4);
+        border-color: rgba(255,255,255,0.28);
         background: rgba(255,255,255,0.1);
-        opacity: 1;
       }
       .hours {
         display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px;
@@ -1795,32 +1803,31 @@ class AnkerScheduleCard extends HTMLElement {
       .swatch.charge { background: var(--color-charge); box-shadow: 0 0 6px var(--color-charge); }
       .swatch.discharge { background: var(--color-discharge); box-shadow: 0 0 6px var(--color-discharge); }
       .swatch.current { background: rgba(255,255,255,0.55); }
-      .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+      .actions {
+        display: flex; flex-wrap: wrap; align-items: center;
+        gap: 8px; margin-top: 14px;
+      }
       .actions button {
         appearance: none; border: 1px solid rgba(63,182,255,0.28);
         background: rgba(63,182,255,0.08); color: #d8e6ee;
-        border-radius: 8px; padding: 7px 12px; font-size: 12px; cursor: pointer;
+        border-radius: 8px; padding: 7px 12px; font-size: 12px;
+        line-height: 1.2; cursor: pointer; box-sizing: border-box;
       }
       .actions button:hover {
         background: rgba(63,182,255,0.16); border-color: rgba(63,182,255,0.5);
       }
+      .actions .selection-clear {
+        margin-left: auto;
+      }
+      .actions .selection-clear.hidden { display: none; }
       .footer-bar {
-        display: flex; flex-direction: column; align-items: flex-end;
-        gap: 6px; margin-top: 12px; min-height: 28px;
+        display: flex; justify-content: flex-end; align-items: center;
+        margin-top: 6px; min-height: 20px;
       }
-      .selection-clear {
-        appearance: none; border: 1px solid rgba(63,182,255,0.28);
-        background: rgba(63,182,255,0.08); color: #d8e6ee;
-        border-radius: 8px; padding: 7px 12px; font-size: 12px; cursor: pointer;
-      }
-      .selection-clear:hover {
-        background: rgba(63,182,255,0.16); border-color: rgba(63,182,255,0.5);
-      }
-      .selection-clear.hidden { display: none; }
       .selection-count {
         color: #6a8490; font-size: 14px; font-weight: 600;
         letter-spacing: 0.3px; font-variant-numeric: tabular-nums;
-        line-height: 1.2;
+        line-height: 1.2; text-align: right;
       }
       .selection-count.has-selection { color: #eaf6ff; }
       .actions button:disabled { opacity: 0.75; cursor: default; }
