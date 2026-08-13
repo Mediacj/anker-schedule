@@ -1,14 +1,24 @@
 /*
  * Anker Schedule — Lovelace card (single module entry).
- * Resource / extra_module_url: /local/anker-schedule/anker-schedule.js
+ * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.27";
+const CARD_VERSION = "1.0.28";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
 const TAG = "anker-schedule";
 const EDITOR = "anker-schedule-editor";
+
+// Voorkom dubbele side-effects als de module toch 2× geladen wordt.
+const IS_FIRST_MODULE_LOAD = !window.__ANKER_SCHEDULE_MODULE__;
+if (IS_FIRST_MODULE_LOAD) {
+  window.__ANKER_SCHEDULE_MODULE__ = CARD_VERSION;
+} else {
+  console.info(
+    `ANKER-SCHEDULE ${CARD_VERSION}: skip duplicate module load (was ${window.__ANKER_SCHEDULE_MODULE__})`
+  );
+}
 
 /** Entity-keys horen in de integratie-config, niet in card-YAML. */
 const ENTITY_CONFIG_KEYS = [
@@ -29,6 +39,7 @@ function stripEntityConfig(config) {
   return out;
 }
 
+/** Alleen rebuilden na echte customElements re-define (niet periodiek). */
 const rebuildLovelace = () => {
   const walk = (root) => {
     if (!root) return;
@@ -50,21 +61,18 @@ const rebuildLovelace = () => {
     });
   };
   walk(document);
-  try {
-    window.dispatchEvent(
-      new CustomEvent("ll-rebuild", { bubbles: true, composed: true })
-    );
-  } catch (_e) {
-    /* ignore */
-  }
 };
 
 /** HA 2026.8 scoped customElements race heal (frontend#52960). */
 const defineElement = (name, ctor) => {
+  if (!IS_FIRST_MODULE_LOAD && customElements.get(name)) return;
+
   const registryAtLoad = customElements;
   if (!registryAtLoad.get(name)) {
     registryAtLoad.define(name, ctor);
   }
+  if (!IS_FIRST_MODULE_LOAD) return;
+
   const heal = (via) => {
     if (customElements.get(name)) return;
     try {
@@ -81,12 +89,15 @@ const defineElement = (name, ctor) => {
     .whenDefined("home-assistant")
     .then(() => heal("ha-boot"))
     .catch(() => {});
-  [0, 50, 100, 250, 500, 1000, 1500, 2000, 5000].forEach((ms) => {
+  // Beperkte timers: genoeg voor registry-swap, geen storm aan rebuilds.
+  [0, 250, 1000].forEach((ms) => {
     window.setTimeout(() => heal(`timer:${ms}ms`), ms);
   });
 };
 
-console.info(`ANKER-SCHEDULE ${CARD_VERSION}`);
+if (IS_FIRST_MODULE_LOAD) {
+  console.info(`ANKER-SCHEDULE ${CARD_VERSION}`);
+}
 const MODES = ["off", "nom", "nom_o", "charge", "discharge"];
 const MODE_LABEL = {
   off: "Uit",
@@ -1874,7 +1885,7 @@ class AnkerScheduleCard extends HTMLElement {
 
 
 window.customCards = window.customCards || [];
-if (!window.customCards.some((c) => c.type === TAG)) {
+if (IS_FIRST_MODULE_LOAD && !window.customCards.some((c) => c.type === TAG)) {
   window.customCards.push({
     type: TAG,
     name: "Anker SOLIX Schedule",

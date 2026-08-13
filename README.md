@@ -39,7 +39,13 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / NOM-O / 
    - Min SOC ontladen (optioneel, bijv. `number.*_ontladingslimiet`)
    - NOM-O switch (standaard `switch.anker_nom`)
 
-De card wordt automatisch geladen via `/local/anker-schedule/anker-schedule.js`.
+De card wordt **één keer** geladen via `extra_module_url`:
+
+- `/local/anker-schedule/anker-schedule.js`
+
+Geen aparte Lovelace-resource nodig (die veroorzaakte een dubbele load). Bij upgrade ruimt de integratie oude Anker-resources onder **Dashboard → Bronnen** op.
+
+Na update: **HA herstarten**, hard refresh. Console: één regel `ANKER-SCHEDULE 1.0.28`.
 
 ## Dashboard card
 
