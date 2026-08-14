@@ -14,10 +14,6 @@
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg?style=flat-square" alt="HACS"></a>
 </p>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/dashboard.jpg" alt="Anker SOLIX Schedule dashboard" width="720">
-</p>
-
 ---
 
 Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / NOM-O / laden / ontladen).
@@ -27,6 +23,16 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / NOM-O / 
 - Brand-icoon in `brand/` (Energienerds) voor het integratiescherm
 
 ## Installeren
+
+### Snelste manier (HACS)
+
+<p align="center">
+  <a href="https://my.home-assistant.io/redirect/hacs_repository/?repository=anker-schedule&category=integration&owner=Mediacj" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open your Home Assistant instance and open a repository inside the Home Assistant Community Store." /></a>
+</p>
+
+Klik op de knop hierboven om de repository direct in HACS te openen (Home Assistant moet bereikbaar zijn vanaf dit apparaat).
+
+### Handmatig / via HACS-custom repository
 
 1. Installeer via HACS (custom repository) of kopieer `custom_components/anker_schedule` naar je Home Assistant `custom_components`-map.
 2. Herstart Home Assistant.
@@ -45,7 +51,13 @@ De card wordt **één keer** geladen via `extra_module_url`:
 
 Geen aparte Lovelace-resource nodig (die veroorzaakte een dubbele load). Bij upgrade ruimt de integratie oude Anker-resources onder **Dashboard → Bronnen** op.
 
-Na update: **HA herstarten**, hard refresh. Console: één regel `ANKER-SCHEDULE 1.0.28`.
+Na update: **HA herstarten**, hard refresh. Console: één regel `ANKER-SCHEDULE 1.0.30`.
+
+## Schermvoorbeeld
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/dashboard.jpg" alt="Anker SOLIX Schedule card" width="720">
+</p>
 
 ## Dashboard card
 
