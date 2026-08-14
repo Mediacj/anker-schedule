@@ -58,9 +58,7 @@ Welke velden van de officiële Anker Solix-integratie je daarvoor kiest:
 
 ## Dashboard card
 
-### Entities
-
-Dahboard opties:
+### Dahboard opties:
 
 Minimaal is dus genoeg:
 
@@ -99,15 +97,13 @@ colors:
   idle: "#7fa6b8"
 ```
 
-Entities (bedrijfsmodus, vermogen, SOC, NOM-switch, schema) komen uitsluitend uit de **integratieconfiguratie**, niet uit de card-YAML.
-
 Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pickers).
 
 ### Card YAML-velden
 
 | Veld | Type | Standaard | Beschrijving |
 |------|------|-----------|--------------|
-| `title` | string | `ANKER PLANNER` | Titel bovenaan de card |
+| `title` | string | `ANKER PLANNER` | Titel bovenaan de kaart |
 | `nom_o_label` | string | `NOM-O` | Eigen tekst voor de NOM-O-knop; wordt ook in de legenda en de statusblokken gebruikt |
 | `nom_o_tag` | string | `N-O` | Eigen tekst op de NOM-O-uurtegels; maximaal 3 tekens, langer wordt afgekapt |
 | `enabled` | bool | `true` | Startwaarde planner aan/uit |
@@ -134,8 +130,6 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 De moduskleuren bepalen de legenda én de **exacte achtergrondkleur** van de uurtegels (zoals in de color pickers).
 
 
-\* `auto_apply` is impliciet `false` zodra de integratie-schema-entity beschikbaar is.
-
 ## Entities (integratie)
 
 | Entity | Functie |
@@ -160,11 +154,11 @@ De moduskleuren bepalen de legenda én de **exacte achtergrondkleur** van de uur
 - **Uit / leeg** → vermogen op **0 W** + NOM-switch UIT (tenzij `off_option` gezet)
 - **Na laden/ontladen → NOM of NOM-O** → geen vermogen-reset aan het einde van het uur
 
-Toepassen gebeurt bij HA-start, elk heel uur, bij schema-wijzigingen voor het huidige uur, en **elke minuut** als de live bedrijfsmodus niet meer overeenkomt met het schema (bijv. als Anker of een andere automation tussentijds weer `third_party_control` zet). Bij uurwissel met **dezelfde modus** (NOM→NOM, NOM-O→NOM-O, laden→laden) gebeurt geen nieuwe mode-select — de modus loopt door; alleen power/SOC worden bijgewerkt als die afwijken. Elke write (modus, switch, vermogen, SOC) checkt eerst of de entity al op die waarde staat. De minuutcontrole herleest eerst het schema; staat het huidige uur op **Uit**, dan blijft de planner in stand-by en herstelt hij geen modus. Na een NOM-apply volgt ook een korte nabcontrole (~3s) om die race te winnen.
+Toepassen gebeurt bij HA-start, elk heel uur, bij schema-wijzigingen voor het huidige uur, en **elke minuut** als de live bedrijfsmodus niet meer overeenkomt met het schema (bijv. als Anker of een andere automation tussentijds weer `third_party_control` zet). Bij uurwissel met **dezelfde modus** (NOM→NOM, NOM-O→NOM-O, laden→laden) gebeurt geen nieuwe mode-select — de modus loopt door; alleen power/SOC worden bijgewerkt als die afwijken. Elke write (modus, switch, vermogen, SOC) checkt eerst of de entity al op die waarde staat. De minuutcontrole herleest eerst het schema; staat het huidige uur op **Uit**, dan blijft de planner in stand-by en herstelt hij geen modus.
 
 ## SOC per uur
 
-Zet `show_soc: false` in de card-YAML om de SOC-slider te verbergen (standaard aan). Selecteer je een uur met **Laden**, **Ontladen** of **NOM**, dan verschijnt onder (of i.p.v.) de vermogensslider de SOC-regelaar(s) in hetzelfde kader:
+Zet `show_soc: false` in de card-YAML om de SOC-sliders te verbergen (standaard aan). Selecteer je een uur met **Laden**, **Ontladen** of **NOM**, dan verschijnt onder (of i.p.v.) de vermogensslider de SOC-regelaar(s) in hetzelfde kader:
 
 - **Laden** → *Max SOC*
 - **Ontladen** → *Min SOC*
