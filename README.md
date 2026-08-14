@@ -45,6 +45,12 @@ Klik op de knop hierboven om de repository direct in HACS te openen (Home Assist
    - Min SOC ontladen (optioneel, bijv. `number.*_ontladingslimiet`)
    - NOM-O switch (standaard `switch.anker_nom`)
 
+Welke velden van de officiële Anker Solix-integratie je daarvoor kiest:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/installatie-entities.jpg" alt="Welke Anker Solix-entities bij installatie van Anker SOLIX Schedule" width="900">
+</p>
+
 De card wordt **één keer** geladen via `extra_module_url`:
 
 - `/local/anker-schedule/anker-schedule.js`
