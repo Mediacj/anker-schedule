@@ -1679,15 +1679,30 @@ class AnkerScheduleCard extends HTMLElement {
         font-weight: 700;
       }
       .mode-value[data-mode="nom"],
-      .next-mode-value[data-mode="nom"] { color: var(--color-nom); }
+      .next-mode-value[data-mode="nom"] {
+        color: var(--color-nom);
+        text-shadow: 0 0 8px color-mix(in srgb, var(--color-nom) 55%, transparent);
+      }
       .mode-value[data-mode="nom_o"],
-      .next-mode-value[data-mode="nom_o"] { color: var(--color-nom-o); }
+      .next-mode-value[data-mode="nom_o"] {
+        color: var(--color-nom-o);
+        text-shadow: 0 0 8px color-mix(in srgb, var(--color-nom-o) 55%, transparent);
+      }
       .mode-value[data-mode="charge"],
-      .next-mode-value[data-mode="charge"] { color: var(--color-charge); }
+      .next-mode-value[data-mode="charge"] {
+        color: var(--color-charge);
+        text-shadow: 0 0 8px color-mix(in srgb, var(--color-charge) 55%, transparent);
+      }
       .mode-value[data-mode="discharge"],
-      .next-mode-value[data-mode="discharge"] { color: var(--color-discharge); }
+      .next-mode-value[data-mode="discharge"] {
+        color: var(--color-discharge);
+        text-shadow: 0 0 8px color-mix(in srgb, var(--color-discharge) 55%, transparent);
+      }
       .mode-value[data-mode="off"],
-      .next-mode-value[data-mode="off"] { color: #9fc4d6; }
+      .next-mode-value[data-mode="off"] {
+        color: var(--color-idle);
+        text-shadow: none;
+      }
       .brush-row {
         display: grid; grid-template-columns: repeat(5, 1fr);
         gap: 6px; margin-bottom: 12px;
