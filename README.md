@@ -6,7 +6,7 @@
 
 <p align="center">
   Home Assistant-integratie van <a href="https://energienerds.nl/">Energienerds.nl</a><br>
-  24u-planner voor Anker Solix: NOM / NOM-O / laden / ontladen
+  24u-planner voor Anker Solix: NOM / laden / ontladen
 </p>
 
 <p align="center">
@@ -16,11 +16,10 @@
 
 ---
 
-Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / NOM-O / laden / ontladen).
+Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / laden / ontladen).
 
-- Eigen Lovelace-card (automatisch geladen) — **geen** community/`www/community` resource nodig
-- Backend past elk uur toe — geen aparte automation of `input_text`-helper nodig
-- Brand-icoon in `brand/` (Energienerds) voor het integratiescherm
+- Eigen Lovelace-card
+- Backend past elk uur toe — geen aparte automation nodig
 
 ## Installeren
 
@@ -51,14 +50,6 @@ Welke velden van de officiële Anker Solix-integratie je daarvoor kiest:
   <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/installatie-entities.jpg" alt="Welke Anker Solix-entities bij installatie van Anker SOLIX Schedule" width="900">
 </p>
 
-De card wordt **één keer** geladen via `extra_module_url`:
-
-- `/local/anker-schedule/anker-schedule.js`
-
-Geen aparte Lovelace-resource nodig (die veroorzaakte een dubbele load). Bij upgrade ruimt de integratie oude Anker-resources onder **Dashboard → Bronnen** op.
-
-Na update: **HA herstarten**, hard refresh. Console: één regel `ANKER-SCHEDULE 1.0.30`.
-
 ## Schermvoorbeeld
 
 <p align="center">
@@ -69,7 +60,7 @@ Na update: **HA herstarten**, hard refresh. Console: één regel `ANKER-SCHEDULE
 
 ### Entities
 
-Entities komen **alleen** uit de integratieconfiguratie (bij installeren/opties). Zet ze niet in de card-YAML — oude entity-velden worden bij openen van de editor opgeschoond.
+Dahboard opties:
 
 Minimaal is dus genoeg:
 
