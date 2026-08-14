@@ -62,6 +62,18 @@ Welke velden van de officiële Anker Solix-integratie je daarvoor kiest:
 
 ## Dashboard card
 
+<b>NOM-O Modus</b>
+
+Naast de standaardmodi (NOM, Laden en Ontladen) is er een vierde modus toegevoegd: NOM-O.
+
+Aan de NOM-O-modus kun je een eigen switch-entiteit koppelen die een specifiek script activeert. Dit maakt het mogelijk om aangepast regelgedrag in te stellen.
+
+Praktijkvoorbeeld:
+
+Je kunt een script koppelen dat uitsluitend het actuele verbruik compenseert, maar voorkomt dat de batterij wordt opgeladen. Dit is ideaal om het laden ’s ochtends uit te stellen totdat de goedkope dynamische uren ingaan.
+
+Tip: Je kunt elk gewenst script aan deze modus koppelen én de weergavenaam aanpassen in de configuratie van de Lovelace-kaart.
+
 ### Dahboard opties:
 
 Minimaal is onderstaande yaml genoeg:
