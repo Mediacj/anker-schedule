@@ -33,7 +33,7 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / laden / 
   <a href="https://my.home-assistant.io/redirect/hacs_repository/?repository=anker-schedule&category=integration&owner=Mediacj" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open your Home Assistant instance and open a repository inside the Home Assistant Community Store." /></a>
 </p>
 
-Klik op de knop hierboven om de repository direct in HACS te openen (Home Assistant moet bereikbaar zijn vanaf dit apparaat).
+Klik op de knop hierboven om de repository direct in HACS te openen (Home Assistant moet bereikbaar zijn vanaf dit apparaat). Ga na het downloaden verder naar stap 2 hieronder.
 
 ### Handmatig / via HACS-custom repository
 
