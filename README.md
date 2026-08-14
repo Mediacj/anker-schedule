@@ -36,6 +36,8 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / laden / 
 
 ## Installeren
 
+Vergeet niet eerste de <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a> te installeren.
+
 ### Snelste manier (HACS)
 
 <p align="center">
