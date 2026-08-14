@@ -64,7 +64,7 @@ Welke velden van de officiële Anker Solix-integratie je daarvoor kiest:
 
 ### Dahboard opties:
 
-Minimaal is dus genoeg:
+Minimaal is onderstaande yaml genoeg:
 
 ```yaml
 type: custom:anker-schedule
