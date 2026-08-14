@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.29";
+const CARD_VERSION = "1.0.30";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
