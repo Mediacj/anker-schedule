@@ -25,6 +25,12 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / laden / 
 - werkt met de, <a href="https://energienerds.nl/index.php/2026/05/16/anker-solix-solarbank-max-ac-review" target="_blank" rel="noopener">Anker SOLIX Solarbank Max AC</a> en de <a href="https://energienerds.nl/index.php/2026/06/02/anker-solix-solarbank-4-e5000-pro-review" target="_blank" rel="noopener">Solarbank 4 E5000 PRO</a>
 - Geïnstalleerde <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a>
 
+## Schermvoorbeeld
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/dashboard.jpg" alt="Anker SOLIX Schedule card" width="720">
+</p>
+
 ## Installeren
 
 ### Snelste manier (HACS)
@@ -52,12 +58,6 @@ Welke velden van de officiële Anker Solix-integratie je daarvoor kiest:
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/installatie-entities.jpg" alt="Welke Anker Solix-entities bij installatie van Anker SOLIX Schedule" width="900">
-</p>
-
-## Schermvoorbeeld
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/dashboard.jpg" alt="Anker SOLIX Schedule card" width="720">
 </p>
 
 ## Dashboard card
