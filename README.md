@@ -23,7 +23,7 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / laden / 
 
 ## Randvoorwaarden
 - werkt met de Anker SOLIX Solarbank Max AC en de Solarbank 4 E5000 PRO
-- werkende <a href="https://github.com/anker-charging/ha-anker-solix-official">Anker Official Integration</a>
+- Geïnstalleerde <a href="https://github.com/anker-charging/ha-anker-solix-official">Anker Official Integration</a>
 
 ## Installeren
 
