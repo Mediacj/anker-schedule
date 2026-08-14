@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/energienerds.png" alt="Energienerds" width="140">
+  <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/energienerds.png" target="_blank" alt="Energienerds" width="140">
 </p>
 
 <h1 align="center">Anker SOLIX Schedule</h1>
 
 <p align="center">
-  Home Assistant-integratie van <a href="https://energienerds.nl/">Energienerds.nl</a><br>
+  Home Assistant-integratie van <a href="https://energienerds.nl/" target="_blank">Energienerds.nl</a><br>
   24u-planner voor Anker Solix: NOM / laden / ontladen
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mediacj/anker-schedule"><img src="https://img.shields.io/github/last-commit/Mediacj/anker-schedule?style=flat-square" alt="last commit"></a>
+  <a href="https://github.com/Mediacj/anker-schedule" target="_blank"><img src="https://img.shields.io/github/last-commit/Mediacj/anker-schedule?style=flat-square target="_blank"" alt="last commit"></a>
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg?style=flat-square" alt="HACS"></a>
 </p>
 
@@ -22,8 +22,8 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / laden / 
 - Backend past elk uur toe — geen aparte automation nodig
 
 ## Randvoorwaarden
-- werkt met de, <a href="https://energienerds.nl/index.php/2026/05/16/anker-solix-solarbank-max-ac-review">Anker SOLIX Solarbank Max AC</a> en de <a href="https://energienerds.nl/index.php/2026/06/02/anker-solix-solarbank-4-e5000-pro-review">Solarbank 4 E5000 PRO</a>
-- Geïnstalleerde <a href="https://github.com/anker-charging/ha-anker-solix-official">Anker Official Integration</a>
+- werkt met de, <a href="https://energienerds.nl/index.php/2026/05/16/anker-solix-solarbank-max-ac-review" target="_blank">Anker SOLIX Solarbank Max AC</a> en de <a href="https://energienerds.nl/index.php/2026/06/02/anker-solix-solarbank-4-e5000-pro-review" target="_blank">Solarbank 4 E5000 PRO</a>
+- Geïnstalleerde <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank">Anker Official Integration</a>
 
 ## Installeren
 
