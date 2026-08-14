@@ -5,7 +5,7 @@
 <h1 align="center">Anker SOLIX Schedule</h1>
 
 <p align="center">
-  Home Assistant-integratie van <a href="https://energienerds.nl/" target="_blank">Energienerds.nl</a><br>
+  Home Assistant-integratie van <a href="https://energienerds.nl/" target="_blank" rel="noopener">Energienerds.nl</a><br>
   24u-planner voor Anker Solix: NOM / laden / ontladen
 </p>
 
@@ -22,8 +22,8 @@ Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / laden / 
 - Backend past elk uur toe — geen aparte automation nodig
 
 ## Randvoorwaarden
-- werkt met de, <a href="https://energienerds.nl/index.php/2026/05/16/anker-solix-solarbank-max-ac-review" target="_blank">Anker SOLIX Solarbank Max AC</a> en de <a href="https://energienerds.nl/index.php/2026/06/02/anker-solix-solarbank-4-e5000-pro-review" target="_blank">Solarbank 4 E5000 PRO</a>
-- Geïnstalleerde <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank">Anker Official Integration</a>
+- werkt met de, <a href="https://energienerds.nl/index.php/2026/05/16/anker-solix-solarbank-max-ac-review" target="_blank" rel="noopener">Anker SOLIX Solarbank Max AC</a> en de <a href="https://energienerds.nl/index.php/2026/06/02/anker-solix-solarbank-4-e5000-pro-review" target="_blank" rel="noopener">Solarbank 4 E5000 PRO</a>
+- Geïnstalleerde <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a>
 
 ## Installeren
 
