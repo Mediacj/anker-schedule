@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.28";
+const CARD_VERSION = "1.0.29";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -1261,17 +1261,28 @@ class AnkerScheduleCard extends HTMLElement {
     this._updateNextMode();
   }
 
+  _formatWatts(value) {
+    const n = Math.round(parseFloat(value));
+    return Number.isFinite(n) ? String(n) : "0";
+  }
+
+  _setModeValueStyle(el, modeKey) {
+    if (!el) return;
+    if (modeKey) el.dataset.mode = modeKey;
+    else delete el.dataset.mode;
+  }
+
   _updateNextMode() {
     if (!this._els?.nextModeValue || !this._schedule) return;
     const nextHour = (new Date().getHours() + 1) % 24;
     const slot = this._schedule[nextHour] || this._defaultSlot();
     const label = this._modeLabel(slot.mode);
     if (slot.mode === "charge" || slot.mode === "discharge") {
-      this._els.nextModeValue.textContent = `${label} ${Math.round(slot.power || 0)}W`;
+      this._els.nextModeValue.textContent = `${label} ${this._formatWatts(slot.power)}W`;
     } else {
       this._els.nextModeValue.textContent = label;
     }
-    this._els.nextModeValue.dataset.mode = slot.mode;
+    this._setModeValueStyle(this._els.nextModeValue, slot.mode);
   }
 
   _highlightCurrentHour() {
@@ -1327,19 +1338,21 @@ class AnkerScheduleCard extends HTMLElement {
     const st = this._hass?.states?.[this._config.entity];
     if (!st) {
       this._els.modeValue.textContent = "entity?";
+      this._setModeValueStyle(this._els.modeValue, "");
       return;
     }
     // NOM-O = alleen de switch; die wint altijd van de bedrijfsmodus-select.
     const nomSw = this._hass.states[this._nomSwitchEntity()]?.state;
     if (nomSw === "on") {
       this._els.modeValue.textContent = this._nomOLabel();
-      this._els.modeValue.classList.add("is-self");
+      this._setModeValueStyle(this._els.modeValue, "nom_o");
       return;
     }
     const mode = this._prettyMode(st.state);
     const dir = this._hass.states[this._config.direction_entity]?.state;
     const power = this._hass.states[this._powerEntity()]?.state;
     let extra = "";
+    let modeKey = mode === "NOM" ? "nom" : "off";
     if (mode === "Extern" && dir != null) {
       const d =
         String(dir) === "0" || String(dir).toLowerCase() === "charge"
@@ -1347,10 +1360,13 @@ class AnkerScheduleCard extends HTMLElement {
           : String(dir) === "1" || String(dir).toLowerCase() === "discharge"
             ? "ontladen"
             : dir;
-      extra = power != null ? ` · ${d} ${power}W` : ` · ${d}`;
+      if (d === "laden") modeKey = "charge";
+      else if (d === "ontladen") modeKey = "discharge";
+      extra =
+        power != null ? ` · ${d} ${this._formatWatts(power)}W` : ` · ${d}`;
     }
     this._els.modeValue.textContent = `${mode}${extra}`;
-    this._els.modeValue.classList.toggle("is-self", mode === "NOM");
+    this._setModeValueStyle(this._els.modeValue, modeKey);
   }
 
   async _selectOption(entityId, wanted) {
@@ -1630,6 +1646,7 @@ class AnkerScheduleCard extends HTMLElement {
         background: rgba(63,182,255,0.08);
         color: #9fc4d6; border-radius: 999px; padding: 6px 12px;
         cursor: pointer; font-size: 11px; letter-spacing: 1px;
+        font-weight: 700;
       }
       .toggle-btn.is-on {
         color: #eaf6ff; border-color: rgba(76,175,80,0.55);
@@ -1657,10 +1674,20 @@ class AnkerScheduleCard extends HTMLElement {
         color: #eaf6ff; font-size: 12px;
         text-shadow: 0 0 6px rgba(120,200,255,0.35);
       }
-      .mode-value.is-self {
-        color: var(--color-nom);
-        text-shadow: 0 0 8px rgba(76,175,80,0.55);
+      .mode-value,
+      .next-mode-value {
+        font-weight: 700;
       }
+      .mode-value[data-mode="nom"],
+      .next-mode-value[data-mode="nom"] { color: var(--color-nom); }
+      .mode-value[data-mode="nom_o"],
+      .next-mode-value[data-mode="nom_o"] { color: var(--color-nom-o); }
+      .mode-value[data-mode="charge"],
+      .next-mode-value[data-mode="charge"] { color: var(--color-charge); }
+      .mode-value[data-mode="discharge"],
+      .next-mode-value[data-mode="discharge"] { color: var(--color-discharge); }
+      .mode-value[data-mode="off"],
+      .next-mode-value[data-mode="off"] { color: #9fc4d6; }
       .brush-row {
         display: grid; grid-template-columns: repeat(5, 1fr);
         gap: 6px; margin-bottom: 12px;
@@ -1809,6 +1836,9 @@ class AnkerScheduleCard extends HTMLElement {
         display: flex; justify-content: space-between; align-items: center;
         margin-bottom: 8px; color: #d8e6ee; font-size: 12px;
       }
+      .editor-mode {
+        font-weight: 700;
+      }
       .editor-mode[data-mode="nom"] { color: var(--color-nom); }
       .editor-mode[data-mode="nom_o"] { color: var(--color-nom-o); }
       .editor-mode[data-mode="charge"] { color: var(--color-charge); }
@@ -1875,10 +1905,6 @@ class AnkerScheduleCard extends HTMLElement {
         gap: 8px; margin-top: 0; flex-shrink: 0;
       }
       .selection-clear.hidden { display: none; }
-      .next-mode-value[data-mode="nom"] { color: var(--color-nom); }
-      .next-mode-value[data-mode="nom_o"] { color: var(--color-nom-o); }
-      .next-mode-value[data-mode="charge"] { color: var(--color-charge); }
-      .next-mode-value[data-mode="discharge"] { color: var(--color-discharge); }
     `;
   }
 }
