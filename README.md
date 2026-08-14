@@ -16,7 +16,7 @@
 
 ---
 
-Zelfstandige custom integration met 24u-planner voor Anker Solix (NOM / laden / ontladen en een eigen script).
+Zelfstandige **Home Assistant** custom integration met 24u-planner voor Anker Solix (NOM / laden / ontladen en een eigen script).
 
 - Eigen Lovelace-card
 - Backend past elk uur toe — geen aparte automation nodig
