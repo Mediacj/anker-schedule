@@ -38,7 +38,7 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
 
 ## Installeren
 
-#Vergeet niet om eerste de <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a> te installeren, als je die nog niet hebt.
+#Vergeet niet om eerst de <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a> te installeren, als je die nog niet hebt.
 
 ### Snelste manier (HACS)
 
