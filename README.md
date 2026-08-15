@@ -52,7 +52,7 @@ Klik op de knop hierboven om de repository direct in HACS te openen (Home Assist
 
 1. Installeer via HACS (custom repository) of kopieer `custom_components/anker_schedule` naar je Home Assistant `custom_components`-map.
 2. Herstart Home Assistant.
-3. Ga naar **Instellingen → Apparaten en services → Integratie toevoegen** en zoek **Anker SOLIX Schedule**.
+3. Ga naar **Instellingen → Apparaten en diensten → Integratie toevoegen** en zoek **Anker SOLIX Schedule**.
 4. Kies zelf je entities (velden starten leeg):
    - Bedrijfsmodus select
    - Laad/ontlaadregeling select
