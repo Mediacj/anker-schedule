@@ -24,7 +24,7 @@
 - Kleuren en alle dashboard velden via visuele editor te bewerken
 - Per uur min/max SOC instelbaar (optie SOC weergeven)
 
-Zie ook het artikel op energienerds.nl over deze integratie!
+Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/home-assistant-integratie-anker-solix-zendure" target="_blank" rel="noopener"> energienerds.nl</a> over deze integratie!
 
 ## Randvoorwaarden
 - werkt met de, <a href="https://energienerds.nl/index.php/2026/05/16/anker-solix-solarbank-max-ac-review" target="_blank" rel="noopener">Anker SOLIX Solarbank Max AC</a> en de <a href="https://energienerds.nl/index.php/2026/06/02/anker-solix-solarbank-4-e5000-pro-review" target="_blank" rel="noopener">Solarbank 4 E5000 PRO</a>
