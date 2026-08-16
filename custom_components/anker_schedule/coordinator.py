@@ -373,6 +373,41 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             blocking=True,
         )
 
+    async def _async_apply_third_party_charge(
+        self,
+        *,
+        hour: int,
+        mode_entity: str,
+        direction: str,
+        power_entity: str,
+        power: int,
+    ) -> bool:
+        """Zet externe besturing + charge + vermogen. False bij uurwissel in settle."""
+        third_party = str(
+            self._cfg(CONF_THIRD_PARTY_OPTION, DEFAULT_THIRD_PARTY_OPTION)
+        )
+        third_wanted = self._resolve_option(mode_entity, third_party)
+        needs_settle = (
+            third_wanted is None
+            or self._select_value(mode_entity) != third_wanted
+        )
+        await self._async_select_option(mode_entity, third_party)
+        if needs_settle:
+            await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
+        if dt_util.now().hour != hour:
+            _LOGGER.info(
+                "Anker Schedule: uur gewisseld tijdens settle — "
+                "third_party/charge-apply afgebroken"
+            )
+            self._last_applied_key = None
+            return False
+        await self._async_select_option(
+            direction,
+            str(self._cfg(CONF_CHARGE_OPTION, DEFAULT_CHARGE_OPTION)),
+        )
+        await self._async_set_power(power_entity, power)
+        return True
+
     async def _async_set_nom_switch(self, on: bool) -> None:
         entity_id = str(
             self._cfg(CONF_NOM_SWITCH_ENTITY, DEFAULT_NOM_SWITCH) or ""
@@ -632,12 +667,32 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             # NOM-O: uitsluitend de NOM-switch — verder niets.
             # Vermogen 0 alleen bij overgang naar leeg/uit (niet bij NOM of NOM-O).
+            # NOM → leeg: externe besturing + charge + 0 W (anders blijft self_consumption).
             if mode == MODE_OFF:
-                # Annuleer pending NOM-verify; UIT = stand-by voor dit uur.
                 self._cancel_verify()
-                await self._async_set_power(power_entity, 0)
-
-            if mode == MODE_NOM_O:
+                await self._async_set_nom_switch(False)
+                if prev_mode == MODE_NOM:
+                    ok_idle = await self._async_apply_third_party_charge(
+                        hour=hour,
+                        mode_entity=mode_entity,
+                        direction=direction,
+                        power_entity=power_entity,
+                        power=0,
+                    )
+                    if not ok_idle:
+                        return
+                    _LOGGER.debug(
+                        "Anker Schedule uur %s leeg na NOM — third_party + charge + 0 W",
+                        hour,
+                    )
+                else:
+                    await self._async_set_power(power_entity, 0)
+                    off_option = str(
+                        self._cfg(CONF_OFF_OPTION, DEFAULT_OFF_OPTION)
+                    )
+                    if off_option:
+                        await self._async_select_option(mode_entity, off_option)
+            elif mode == MODE_NOM_O:
                 # Annuleer pending NOM-verify, anders zet die self_consumption terug.
                 self._cancel_verify()
                 await self._async_set_nom_switch(True)
@@ -645,9 +700,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self._async_set_nom_switch(False)
 
             if mode == MODE_OFF:
-                off_option = str(self._cfg(CONF_OFF_OPTION, DEFAULT_OFF_OPTION))
-                if off_option:
-                    await self._async_select_option(mode_entity, off_option)
+                pass
             elif mode == MODE_NOM_O:
                 pass
             elif mode == MODE_NOM:
@@ -662,40 +715,47 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._schedule_verify_after_settle()
             elif mode in (MODE_CHARGE, MODE_DISCHARGE):
                 self._cancel_verify()
-                # Eerst externe modus, dan 2s wachten tot laad/ontlaadregeling
-                # beschikbaar is — alleen als we de modus echt wisselen.
-                third_party = str(
-                    self._cfg(
-                        CONF_THIRD_PARTY_OPTION, DEFAULT_THIRD_PARTY_OPTION
+                if mode == MODE_CHARGE:
+                    ok_charge = await self._async_apply_third_party_charge(
+                        hour=hour,
+                        mode_entity=mode_entity,
+                        direction=direction,
+                        power_entity=power_entity,
+                        power=power,
                     )
-                )
-                third_wanted = self._resolve_option(mode_entity, third_party)
-                needs_settle = (
-                    third_wanted is None
-                    or self._select_value(mode_entity) != third_wanted
-                )
-                await self._async_select_option(mode_entity, third_party)
-                if needs_settle:
-                    await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
-                # Uur kan tijdens de sleep gewisseld zijn — niet doorzetten.
-                if dt_util.now().hour != hour:
-                    _LOGGER.info(
-                        "Anker Schedule: uur gewisseld tijdens settle — "
-                        "charge/discharge-apply afgebroken"
-                    )
-                    self._last_applied_key = None
-                    return
-                await self._async_select_option(
-                    direction,
-                    str(
-                        self._cfg(CONF_CHARGE_OPTION, DEFAULT_CHARGE_OPTION)
-                        if mode == MODE_CHARGE
-                        else self._cfg(
-                            CONF_DISCHARGE_OPTION, DEFAULT_DISCHARGE_OPTION
+                    if not ok_charge:
+                        return
+                else:
+                    # Ontladen: externe modus, 2s settle, dan discharge + vermogen
+                    third_party = str(
+                        self._cfg(
+                            CONF_THIRD_PARTY_OPTION, DEFAULT_THIRD_PARTY_OPTION
                         )
-                    ),
-                )
-                await self._async_set_power(power_entity, power)
+                    )
+                    third_wanted = self._resolve_option(mode_entity, third_party)
+                    needs_settle = (
+                        third_wanted is None
+                        or self._select_value(mode_entity) != third_wanted
+                    )
+                    await self._async_select_option(mode_entity, third_party)
+                    if needs_settle:
+                        await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
+                    if dt_util.now().hour != hour:
+                        _LOGGER.info(
+                            "Anker Schedule: uur gewisseld tijdens settle — "
+                            "discharge-apply afgebroken"
+                        )
+                        self._last_applied_key = None
+                        return
+                    await self._async_select_option(
+                        direction,
+                        str(
+                            self._cfg(
+                                CONF_DISCHARGE_OPTION, DEFAULT_DISCHARGE_OPTION
+                            )
+                        ),
+                    )
+                    await self._async_set_power(power_entity, power)
                 await self._async_set_number(
                     charge_soc_entity if mode == MODE_CHARGE else discharge_soc_entity,
                     soc_max if mode == MODE_CHARGE else soc_min,

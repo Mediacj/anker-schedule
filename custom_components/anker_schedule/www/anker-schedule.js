@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.30";
+const CARD_VERSION = "1.0.31";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -1465,6 +1465,24 @@ class AnkerScheduleCard extends HTMLElement {
     return !!prev && (prev.mode === "charge" || prev.mode === "discharge");
   }
 
+  _previousSlotMode(hour) {
+    const prev = this._schedule[(hour + 23) % 24];
+    return prev?.mode || "off";
+  }
+
+  async _applyThirdPartyCharge(power) {
+    await this._selectOption(
+      this._config.entity,
+      this._config.third_party_option || "3"
+    );
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    await this._selectOption(
+      this._config.direction_entity,
+      this._config.charge_option || "0"
+    );
+    await this._setPower(power);
+  }
+
   _describeSlot(hour, slot) {
     const label = this._modeLabel(slot.mode);
     const hh = String(hour).padStart(2, "0");
@@ -1531,16 +1549,24 @@ class AnkerScheduleCard extends HTMLElement {
     try {
       // NOM-O: uitsluitend de NOM-switch — verder niets.
       // Vermogen 0 alleen bij leeg/uit (niet bij NOM of NOM-O).
+      // NOM → leeg: third_party + charge + 0 W.
       if (slot.mode === "off") {
-        await this._setPower(0);
+        await this._setNomSwitch(false);
+        if (this._previousSlotMode(hour) === "nom") {
+          await this._applyThirdPartyCharge(0);
+        } else {
+          await this._setPower(0);
+          if (this._config.off_option) {
+            await this._selectOption(this._config.entity, this._config.off_option);
+          }
+        }
+        this._lastAppliedKey = key;
+        return ok(`${summary} toegepast`);
       }
 
       await this._setNomSwitch(slot.mode === "nom_o");
 
-      if (slot.mode === "off" || slot.mode === "nom_o") {
-        if (slot.mode === "off" && this._config.off_option) {
-          await this._selectOption(this._config.entity, this._config.off_option);
-        }
+      if (slot.mode === "nom_o") {
         this._lastAppliedKey = key;
         return ok(`${summary} toegepast`);
       }
@@ -1557,18 +1583,20 @@ class AnkerScheduleCard extends HTMLElement {
       }
 
       // charge / discharge → third_party, 2s wachten, dan richting, dan vermogen
-      await this._selectOption(
-        this._config.entity,
-        this._config.third_party_option || "3"
-      );
-      await new Promise((resolve) => window.setTimeout(resolve, 2000));
-      await this._selectOption(
-        this._config.direction_entity,
-        slot.mode === "charge"
-          ? this._config.charge_option || "0"
-          : this._config.discharge_option || "1"
-      );
-      await this._setPower(slot.power);
+      if (slot.mode === "charge") {
+        await this._applyThirdPartyCharge(slot.power);
+      } else {
+        await this._selectOption(
+          this._config.entity,
+          this._config.third_party_option || "3"
+        );
+        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        await this._selectOption(
+          this._config.direction_entity,
+          this._config.discharge_option || "1"
+        );
+        await this._setPower(slot.power);
+      }
       await this._setNumber(
         slot.mode === "charge"
           ? this._chargeSocEntity()
