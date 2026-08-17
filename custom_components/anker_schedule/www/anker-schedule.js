@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.31";
+const CARD_VERSION = "1.0.32";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -1614,6 +1614,9 @@ class AnkerScheduleCard extends HTMLElement {
   _css() {
     return `
       :host { display: block; }
+      ha-card {
+        border-color: color-mix(in srgb, var(--divider-color) 75%, transparent);
+      }
       .panel { background: transparent; font-family: "Roboto", sans-serif; }
       .screen {
         --color-nom: #1b8a3a;
@@ -1621,7 +1624,7 @@ class AnkerScheduleCard extends HTMLElement {
         --color-charge: #3fb6ff;
         --color-discharge: #ff9800;
         --color-current: #eaf6ff;
-        --color-idle: #7fa6b8;
+        --color-idle: #9fc4d6;
         --fill-nom: rgba(27,138,58,0.28);
         --border-nom: rgba(27,138,58,0.8);
         --glow-nom: rgba(27,138,58,0.3);
@@ -1641,8 +1644,8 @@ class AnkerScheduleCard extends HTMLElement {
         padding: 16px 18px 18px;
         overflow: hidden;
         background:
-          radial-gradient(120% 80% at 50% -20%, rgba(63,182,255,0.12), transparent 55%),
-          linear-gradient(180deg, rgba(8,18,28,0.55), rgba(5,12,20,0.25));
+          radial-gradient(120% 80% at 50% -20%, rgba(63,182,255,0.18), transparent 55%),
+          linear-gradient(180deg, rgba(8,18,28,0.88), rgba(5,12,20,0.78));
       }
       .header {
         display: flex; align-items: center; justify-content: space-between;
@@ -1666,13 +1669,13 @@ class AnkerScheduleCard extends HTMLElement {
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
       .subtitle {
-        color: #7fa6b8; font-size: 10px; letter-spacing: 1.4px; margin-top: 2px;
+        color: #b7d0de; font-size: 10px; letter-spacing: 1.4px; margin-top: 2px;
       }
       .toggle-btn {
         display: inline-flex; align-items: center; gap: 8px;
-        border: 1px solid rgba(63,182,255,0.35);
-        background: rgba(63,182,255,0.08);
-        color: #9fc4d6; border-radius: 999px; padding: 6px 12px;
+        border: 1px solid rgba(63,182,255,0.55);
+        background: rgba(63,182,255,0.14);
+        color: #d8e6ee; border-radius: 999px; padding: 6px 12px;
         cursor: pointer; font-size: 11px; letter-spacing: 1px;
         font-weight: 700;
       }
@@ -1682,7 +1685,7 @@ class AnkerScheduleCard extends HTMLElement {
         box-shadow: 0 0 12px rgba(76,175,80,0.25);
       }
       .toggle-dot {
-        width: 8px; height: 8px; border-radius: 50%; background: #7fa6b8;
+        width: 8px; height: 8px; border-radius: 50%; background: #9fc4d6;
       }
       .toggle-btn.is-on .toggle-dot {
         background: var(--color-nom); box-shadow: 0 0 8px var(--color-nom);
@@ -1693,10 +1696,10 @@ class AnkerScheduleCard extends HTMLElement {
       }
       .status-block {
         text-align: center; padding: 8px 4px; border-radius: 8px;
-        background: rgba(255,255,255,0.03);
+        background: rgba(255,255,255,0.08);
       }
       .stat-label {
-        font-size: 10px; letter-spacing: 1px; color: #7fa6b8; margin-bottom: 4px;
+        font-size: 10px; letter-spacing: 1px; color: #b7d0de; margin-bottom: 4px;
       }
       .stat-value {
         color: #eaf6ff; font-size: 12px;
@@ -1736,17 +1739,17 @@ class AnkerScheduleCard extends HTMLElement {
         gap: 6px; margin-bottom: 12px;
       }
       .brush {
-        appearance: none; border: 1px solid rgba(255,255,255,0.1);
-        background: rgba(255,255,255,0.04); color: #9fc4d6;
+        appearance: none; border: 1px solid rgba(255,255,255,0.28);
+        background: rgba(255,255,255,0.08); color: #d8e6ee;
         border-radius: 8px; padding: 8px 2px; cursor: pointer;
         font-size: 11px; letter-spacing: 0.3px;
         transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       }
       .brush.is-muted,
       .brush:disabled {
-        color: #6a7f8c;
-        border-color: rgba(255,255,255,0.22);
-        background: rgba(255,255,255,0.03);
+        color: #b7d0de;
+        border-color: rgba(255,255,255,0.32);
+        background: rgba(255,255,255,0.06);
         box-shadow: none;
         opacity: 1;
         font-weight: 500;
@@ -1801,8 +1804,8 @@ class AnkerScheduleCard extends HTMLElement {
         .hours { grid-template-columns: repeat(12, minmax(0, 1fr)); }
       }
       .hour {
-        appearance: none; border: 1px solid rgba(255,255,255,0.08);
-        background: rgba(255,255,255,0.03); color: var(--color-idle);
+        appearance: none; border: 1px solid rgba(255,255,255,0.22);
+        background: rgba(255,255,255,0.07); color: var(--color-idle);
         border-radius: 8px; padding: 7px 2px 6px; cursor: pointer;
         user-select: none; touch-action: none;
         display: flex; flex-direction: column; align-items: center; gap: 1px;
@@ -1867,12 +1870,12 @@ class AnkerScheduleCard extends HTMLElement {
       .screen.scheduler-off .hour.mode-nom_o,
       .screen.scheduler-off .hour.mode-charge,
       .screen.scheduler-off .hour.mode-discharge {
-        opacity: 0.55; box-shadow: none;
+        opacity: 0.82; box-shadow: none;
       }
       .editor-panel {
         margin-top: 12px; padding: 12px;
-        border-radius: 10px; background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(63,182,255,0.18);
+        border-radius: 10px; background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(63,182,255,0.32);
       }
       .editor-panel.hidden, .power-wrap.hidden, .soc-wrap.hidden, .soc-min-wrap.hidden, .hidden { display: none; }
       .editor-head {
@@ -1888,7 +1891,7 @@ class AnkerScheduleCard extends HTMLElement {
       .editor-mode[data-mode="discharge"] { color: var(--color-discharge); }
       .power-labels {
         display: flex; justify-content: space-between;
-        color: #9fc4d6; font-size: 12px; margin-bottom: 6px;
+        color: #c5dbe7; font-size: 12px; margin-bottom: 6px;
       }
       .power-wrap, .soc-wrap, .soc-min-wrap { width: 100%; }
       .soc-wrap, .soc-min-wrap { margin-top: 10px; }
@@ -1899,7 +1902,7 @@ class AnkerScheduleCard extends HTMLElement {
       }
       .legend {
         display: flex; flex-wrap: wrap; gap: 12px;
-        margin-top: 12px; color: #7fa6b8; font-size: 11px;
+        margin-top: 12px; color: #b7d0de; font-size: 11px;
       }
       .legend span { display: inline-flex; align-items: center; gap: 6px; }
       .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
@@ -1918,8 +1921,8 @@ class AnkerScheduleCard extends HTMLElement {
       }
       .actions button,
       .selection-clear {
-        appearance: none; border: 1px solid rgba(63,182,255,0.28);
-        background: rgba(63,182,255,0.08); color: #d8e6ee;
+        appearance: none; border: 1px solid rgba(63,182,255,0.5);
+        background: rgba(63,182,255,0.14); color: #eaf6ff;
         border-radius: 8px; padding: 7px 12px; font-size: 12px;
         line-height: 1.2; cursor: pointer; box-sizing: border-box;
       }
