@@ -150,6 +150,7 @@ Alle velden zijn ook bewerkbaar in de visuele HA-card-editor (inclusief color pi
 | `colors.current` | hex | `#eaf6ff` | Accent huidig uur |
 | `colors.idle` | hex | `#7fa6b8` | Kleur uit/idle |
 | `transparantie` | number | `15` | (0–100%): mate van doorzichtigheid van de card-achtergrond|
+| `dynamische_energieprijzen` | bool | `true` | wel of niet weergeven functies dynamische energieprijzen|
 
 De moduskleuren bepalen de legenda én de **exacte achtergrondkleur** van de uurtegels (zoals in de color pickers).
 
