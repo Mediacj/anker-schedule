@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.33";
+const CARD_VERSION = "1.0.34";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -28,6 +28,7 @@ const ENTITY_CONFIG_KEYS = [
   "charge_soc_entity",
   "discharge_soc_entity",
   "nom_switch_entity",
+  "nordpool_entity",
   "storage_entity",
 ];
 
@@ -148,6 +149,10 @@ const DEFAULTS = {
   enabled: true,
   // 0 = dekking (geen transparantie), 100 = volledig doorzichtig
   transparantie: 15,
+  // Toon EPEX-grafiek + Goedkoopste/Duurste
+  dynamische_energieprijzen: true,
+  // Aantal uren om te selecteren via Goedkoopste/Duurste
+  aantal_uren: 4,
   colors: {
     nom: "#1b8a3a",
     nom_o: "#00e5c0",
@@ -181,8 +186,11 @@ class AnkerScheduleCard extends HTMLElement {
       ENTITY_CONFIG_KEYS.forEach((key) => {
         this._config[key] = "";
       });
+      this._userConfig = stripEntityConfig(clean);
       this._config.transparantie = this._transparantie();
       delete this._config.transparency;
+      this._config.dynamische_energieprijzen = this._dynamischeEnergieprijzen();
+      this._config.aantal_uren = this._aantalUren();
       this._selectedHours =
         this._selectedHours instanceof Set ? this._selectedHours : new Set();
       this._activeMode = this._activeMode ?? null;
@@ -311,6 +319,7 @@ class AnkerScheduleCard extends HTMLElement {
       ["charge_soc_entity", "charge_soc_entity"],
       ["discharge_soc_entity", "discharge_soc_entity"],
       ["nom_switch_entity", "nom_switch_entity"],
+      ["nordpool_entity", "nordpool_entity"],
     ].forEach(([key, attrKey]) => {
       if (attrs[attrKey]) {
         patch[key] = attrs[attrKey];
@@ -367,6 +376,272 @@ class AnkerScheduleCard extends HTMLElement {
         : Number(raw);
     if (!Number.isFinite(n)) return DEFAULTS.transparantie;
     return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  /** Toon EPEX-grafiek en Goedkoopste/Duurste-knoppen. */
+  _dynamischeEnergieprijzen() {
+    if (this._config?.dynamische_energieprijzen === false) return false;
+    if (this._config?.dynamische_energieprijzen === true) return true;
+    return DEFAULTS.dynamische_energieprijzen;
+  }
+
+  /** Aantal uren voor Goedkoopste/Duurste-selectie. */
+  _aantalUren() {
+    const raw = this._config?.aantal_uren ?? DEFAULTS.aantal_uren;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return DEFAULTS.aantal_uren;
+    return Math.max(1, Math.min(24, Math.round(n)));
+  }
+
+  _setAantalUrenFromUi(raw, { persist = false } = {}) {
+    const value = Math.max(1, Math.min(24, Math.round(Number(raw))));
+    if (!Number.isFinite(value)) return;
+    this._config.aantal_uren = value;
+    this._userConfig = stripEntityConfig({
+      ...(this._userConfig || {}),
+      aantal_uren: value,
+    });
+    if (this._els?.nordpoolHoursSlider) {
+      this._els.nordpoolHoursSlider.value = String(value);
+    }
+    if (this._els?.nordpoolHoursValue) {
+      this._els.nordpoolHoursValue.textContent = String(value);
+    }
+    this._lastNordpoolChartSig = "";
+    this._renderNordpoolChart();
+    if (persist) {
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: { ...this._userConfig } },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }
+  }
+
+  _syncNordpoolHoursUi() {
+    const n = this._aantalUren();
+    const slider = this._els?.nordpoolHoursSlider;
+    const valueEl = this._els?.nordpoolHoursValue;
+    if (slider && this.shadowRoot?.activeElement !== slider) {
+      slider.value = String(n);
+    }
+    if (valueEl) valueEl.textContent = String(n);
+  }
+
+  _nordpoolEntityId() {
+    return this._config?.nordpool_entity || "";
+  }
+
+  /**
+   * Gemiddelde prijs per uur (0–23) uit Nord Pool today/raw_today.
+   * Ondersteunt 15-min (96) en uurlijkse (24) series.
+   */
+  _nordpoolHourlyPrices() {
+    const entityId = this._nordpoolEntityId();
+    if (!entityId || !this._hass?.states?.[entityId]) return null;
+    const attrs = this._hass.states[entityId].attributes || {};
+
+    if (Array.isArray(attrs.raw_today) && attrs.raw_today.length) {
+      const buckets = Array.from({ length: 24 }, () => []);
+      for (const row of attrs.raw_today) {
+        const start = row?.start ? new Date(row.start) : null;
+        const val = Number(row?.value);
+        if (!start || Number.isNaN(start.getTime()) || !Number.isFinite(val)) {
+          continue;
+        }
+        buckets[start.getHours()].push(val);
+      }
+      return buckets
+        .map((vals, hour) =>
+          vals.length
+            ? {
+                hour,
+                price: vals.reduce((a, b) => a + b, 0) / vals.length,
+              }
+            : null
+        )
+        .filter(Boolean);
+    }
+
+    const today = attrs.today;
+    if (!Array.isArray(today) || !today.length) return null;
+
+    if (today.length >= 96) {
+      const out = [];
+      for (let h = 0; h < 24; h++) {
+        const slice = today
+          .slice(h * 4, h * 4 + 4)
+          .map(Number)
+          .filter(Number.isFinite);
+        if (slice.length) {
+          out.push({
+            hour: h,
+            price: slice.reduce((a, b) => a + b, 0) / slice.length,
+          });
+        }
+      }
+      return out.length ? out : null;
+    }
+
+    if (today.length >= 24) {
+      const out = [];
+      for (let h = 0; h < 24; h++) {
+        const price = Number(today[h]);
+        if (Number.isFinite(price)) out.push({ hour: h, price });
+      }
+      return out.length ? out : null;
+    }
+
+    return null;
+  }
+
+  /** Selecteer de N goedkoopste of duurste uren van vandaag (geen modus zetten). */
+  _selectNordpoolHours(kind) {
+    const prices = this._nordpoolHourlyPrices();
+    if (!prices?.length) {
+      console.warn(
+        "Anker Schedule Card: geen Nord Pool-prijzen beschikbaar",
+        this._nordpoolEntityId() || "(geen entity)"
+      );
+      return;
+    }
+    const n = Math.min(this._aantalUren(), prices.length);
+    const sorted = [...prices].sort((a, b) =>
+      kind === "expensive" ? b.price - a.price : a.price - b.price
+    );
+    this._selectedHours = new Set(sorted.slice(0, n).map((row) => row.hour));
+    this._activeMode = null;
+    this._syncChrome();
+    this._renderEditorPanel();
+  }
+
+  _nordpoolPriceUnit() {
+    const entityId = this._nordpoolEntityId();
+    const attrs = this._hass?.states?.[entityId]?.attributes || {};
+    return (
+      attrs.unit_of_measurement ||
+      (attrs.price_in_cents ? "c/kWh" : "€/kWh")
+    );
+  }
+
+  _formatNordpoolPrice(price) {
+    const n = Number(price);
+    if (!Number.isFinite(n)) return "—";
+    const rounded = Math.round(n * 1000) / 1000;
+    const text =
+      Math.abs(rounded - Math.round(rounded)) < 1e-9
+        ? String(Math.round(rounded))
+        : String(rounded);
+    return `${text} ${this._nordpoolPriceUnit()}`;
+  }
+
+  _nordpoolRankSets(prices) {
+    const n = Math.min(this._aantalUren(), prices.length);
+    const byAsc = [...prices].sort((a, b) => a.price - b.price);
+    return {
+      cheap: new Set(byAsc.slice(0, n).map((row) => row.hour)),
+      expensive: new Set(byAsc.slice(-n).map((row) => row.hour)),
+    };
+  }
+
+  _hideNordpoolTip() {
+    this._els?.nordpoolTip?.classList.add("hidden");
+  }
+
+  _showNordpoolTip(col, price, hour) {
+    const tip = this._els?.nordpoolTip;
+    const chart = this._els?.nordpoolChart;
+    if (!tip || !chart || !col) return;
+    tip.textContent = `${String(hour).padStart(2, "0")}:00 · ${this._formatNordpoolPrice(price)}`;
+    tip.classList.remove("hidden");
+    const chartBox = chart.getBoundingClientRect();
+    const colBox = col.getBoundingClientRect();
+    const tipW = tip.offsetWidth || 120;
+    let left = colBox.left - chartBox.left + colBox.width / 2 - tipW / 2;
+    left = Math.max(4, Math.min(left, chartBox.width - tipW - 4));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(4, colBox.top - chartBox.top - 28)}px`;
+  }
+
+  _renderNordpoolChart() {
+    const wrap = this._els?.nordpoolChart;
+    const bars = this._els?.nordpoolBars;
+    if (!wrap || !bars) return;
+
+    if (!this._dynamischeEnergieprijzen()) {
+      wrap.classList.add("hidden");
+      bars.innerHTML = "";
+      this._lastNordpoolChartSig = "";
+      this._hideNordpoolTip();
+      return;
+    }
+
+    const prices = this._nordpoolHourlyPrices();
+    if (!prices?.length) {
+      wrap.classList.add("hidden");
+      bars.innerHTML = "";
+      this._lastNordpoolChartSig = "";
+      this._hideNordpoolTip();
+      return;
+    }
+
+    const byHour = new Map(prices.map((row) => [row.hour, row.price]));
+    const vals = prices.map((row) => row.price);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = Math.max(0.001, max - min);
+    const { cheap, expensive } = this._nordpoolRankSets(prices);
+    const nowHour = new Date().getHours();
+    const sig = `${this._nordpoolEntityId()}|${this._aantalUren()}|${nowHour}|${prices
+      .map((row) => `${row.hour}:${row.price}`)
+      .join(",")}`;
+    if (
+      sig === this._lastNordpoolChartSig &&
+      bars.childElementCount === 24 &&
+      !wrap.classList.contains("hidden")
+    ) {
+      return;
+    }
+    this._lastNordpoolChartSig = sig;
+
+    if (this._els.nordpoolUnit) {
+      this._els.nordpoolUnit.textContent = this._nordpoolPriceUnit();
+    }
+
+    bars.innerHTML = "";
+    for (let h = 0; h < 24; h++) {
+      const price = byHour.get(h);
+      const col = document.createElement("div");
+      col.className = "np-col";
+      if (!Number.isFinite(price)) {
+        col.classList.add("is-empty");
+      } else {
+        const pct = 12 + ((price - min) / span) * 88;
+        col.style.setProperty("--h", `${pct}%`);
+        if (cheap.has(h) && expensive.has(h)) col.classList.add("is-both");
+        else if (cheap.has(h)) col.classList.add("is-cheap");
+        else if (expensive.has(h)) col.classList.add("is-expensive");
+        col.title = `${String(h).padStart(2, "0")}:00 · ${this._formatNordpoolPrice(price)}`;
+        col.addEventListener("pointerenter", () => {
+          this._showNordpoolTip(col, price, h);
+        });
+        col.addEventListener("pointermove", () => {
+          this._showNordpoolTip(col, price, h);
+        });
+        col.addEventListener("pointerleave", () => this._hideNordpoolTip());
+        col.addEventListener("click", () => {
+          this._toggleHourSelection(h);
+        });
+      }
+      if (h === nowHour) col.classList.add("is-now");
+      col.innerHTML = `<div class="np-bar"></div><div class="np-label">${String(h).padStart(2, "0")}</div>`;
+      bars.appendChild(col);
+    }
+
+    this._syncNordpoolHoursUi();
+    wrap.classList.remove("hidden");
   }
 
   _defaultPower() {
@@ -884,11 +1159,27 @@ class AnkerScheduleCard extends HTMLElement {
           <div class="actions-row">
             <div class="actions">
               <button type="button" data-action="all-nom">Alles NOM</button>
+              <button type="button" class="np-pick-btn" data-action="pick-cheap">Goedkoopste</button>
+              <button type="button" class="np-pick-btn" data-action="pick-expensive">Duurste</button>
               <button type="button" data-action="all-off">Alles uit</button>
               <button type="button" class="ok-btn hidden" data-action="save-ok">OK</button>
             </div>
             <div class="footer-bar">
               <button type="button" class="selection-clear hidden" data-action="clear-selection">Wis selectie</button>
+            </div>
+          </div>
+
+          <div class="nordpool-chart hidden" aria-label="EPEX prijzen vandaag">
+            <div class="nordpool-chart-head">
+              <span class="nordpool-chart-title">EPEX Vandaag</span>
+              <span class="nordpool-chart-unit"></span>
+            </div>
+            <div class="nordpool-chart-bars" role="img"></div>
+            <div class="nordpool-chart-tip hidden"></div>
+            <div class="nordpool-hours-row">
+              <label class="nordpool-hours-label" for="as-np-hours">Aantal uren</label>
+              <input id="as-np-hours" class="nordpool-hours-slider" type="range" min="1" max="24" step="1" value="4">
+              <span class="nordpool-hours-value">4</span>
             </div>
           </div>
 
@@ -930,7 +1221,24 @@ class AnkerScheduleCard extends HTMLElement {
       applyBtn: card.querySelector(".ok-btn"),
       brushRow: card.querySelector(".brush-row"),
       selectionClear: card.querySelector(".selection-clear"),
+      nordpoolChart: card.querySelector(".nordpool-chart"),
+      nordpoolBars: card.querySelector(".nordpool-chart-bars"),
+      nordpoolUnit: card.querySelector(".nordpool-chart-unit"),
+      nordpoolTip: card.querySelector(".nordpool-chart-tip"),
+      nordpoolHoursSlider: card.querySelector(".nordpool-hours-slider"),
+      nordpoolHoursValue: card.querySelector(".nordpool-hours-value"),
+      pickCheapBtn: card.querySelector('[data-action="pick-cheap"]'),
+      pickExpensiveBtn: card.querySelector('[data-action="pick-expensive"]'),
     };
+
+    this._els.nordpoolHoursSlider?.addEventListener("input", () => {
+      this._setAantalUrenFromUi(this._els.nordpoolHoursSlider.value);
+    });
+    this._els.nordpoolHoursSlider?.addEventListener("change", () => {
+      this._setAantalUrenFromUi(this._els.nordpoolHoursSlider.value, {
+        persist: true,
+      });
+    });
 
     this._els.toggleBtn.addEventListener("click", () => {
       this._enabled = !this._enabled;
@@ -1003,6 +1311,10 @@ class AnkerScheduleCard extends HTMLElement {
           }));
           this._clearSelection();
           this._stageScheduleChange();
+        } else if (action === "pick-cheap") {
+          this._selectNordpoolHours("cheap");
+        } else if (action === "pick-expensive") {
+          this._selectNordpoolHours("expensive");
         } else if (action === "all-off") {
           this._schedule = Array.from({ length: 24 }, () => this._defaultSlot());
           this._clearSelection();
@@ -1286,7 +1598,12 @@ class AnkerScheduleCard extends HTMLElement {
     this._els.applyBtn?.classList.toggle("hidden", !this._dirty);
     this._els.selectionClear?.classList.toggle("hidden", !armed);
 
+    const dyn = this._dynamischeEnergieprijzen();
+    this._els.pickCheapBtn?.classList.toggle("hidden", !dyn);
+    this._els.pickExpensiveBtn?.classList.toggle("hidden", !dyn);
+
     this._updateNextMode();
+    this._renderNordpoolChart();
   }
 
   _formatWatts(value) {
@@ -1883,19 +2200,28 @@ class AnkerScheduleCard extends HTMLElement {
         text-shadow: 0 1px 2px rgba(0,0,0,0.35);
       }
       .hour.current {
-        outline: 3px solid var(--color-current);
+        outline: 3px solid color-mix(in srgb, var(--color-current) 95%, transparent);
         outline-offset: 1px;
-        box-shadow: 0 0 12px rgba(234,246,255,0.55);
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--color-current) 70%, transparent),
+          0 0 14px color-mix(in srgb, var(--color-current) 45%, transparent);
+        z-index: 1;
       }
       .hour.selected {
         outline: 2px solid rgba(63,182,255,1);
         outline-offset: 1px;
+        box-shadow: 0 0 12px rgba(63,182,255,0.55);
+        z-index: 2;
       }
       .hour.current.selected {
-        outline: 3px solid var(--color-current);
+        outline: 3px solid #3fb6ff;
+        outline-offset: 2px;
         box-shadow:
-          0 0 0 2px rgba(63,182,255,0.85),
-          0 0 12px rgba(234,246,255,0.55);
+          0 0 0 3px color-mix(in srgb, var(--color-current) 95%, transparent),
+          0 0 0 6px rgba(63,182,255,0.45),
+          0 0 18px rgba(63,182,255,0.85);
+        filter: brightness(1.14);
+        z-index: 3;
       }
       .screen.scheduler-off .hour.mode-nom,
       .screen.scheduler-off .hour.mode-nom_o,
@@ -1945,6 +2271,111 @@ class AnkerScheduleCard extends HTMLElement {
       .actions-row {
         display: flex; align-items: flex-start; justify-content: space-between;
         gap: 12px; margin-top: 14px;
+      }
+      .nordpool-chart {
+        position: relative;
+        margin-top: 14px;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px 10px 8px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(63,182,255,0.28);
+      }
+      .nordpool-chart.hidden { display: none; }
+      .nordpool-chart-head {
+        display: flex; justify-content: space-between; align-items: baseline;
+        gap: 8px; margin-bottom: 8px;
+        color: #d8e6ee; font-size: 11px; letter-spacing: 0.4px;
+      }
+      .nordpool-chart-title { font-weight: 700; color: #eaf6ff; }
+      .nordpool-chart-unit { color: #b7d0de; opacity: 0.9; }
+      .nordpool-chart-bars {
+        display: grid;
+        grid-template-columns: repeat(24, minmax(0, 1fr));
+        gap: 3px;
+        height: 88px;
+        align-items: end;
+      }
+      .np-col {
+        height: 100%;
+        display: flex; flex-direction: column;
+        justify-content: flex-end; align-items: center;
+        gap: 3px; min-width: 0; cursor: pointer;
+      }
+      .np-col.is-empty { cursor: default; opacity: 0.35; }
+      .np-bar {
+        width: 100%;
+        max-width: 14px;
+        height: var(--h, 20%);
+        border-radius: 3px 3px 1px 1px;
+        background: rgba(159,196,214,0.45);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+        transition: filter 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+      }
+      .np-col.is-cheap .np-bar {
+        background: #1bdf62;
+        box-shadow: 0 0 10px rgba(27,223,98,0.55);
+      }
+      .np-col.is-expensive .np-bar {
+        background: #ff3b4a;
+        box-shadow: 0 0 10px rgba(255,59,74,0.55);
+      }
+      .np-col.is-both .np-bar {
+        background: linear-gradient(180deg, #ff3b4a 0%, #1bdf62 100%);
+        box-shadow: 0 0 10px rgba(255,180,40,0.45);
+      }
+      .np-col.is-now .np-bar {
+        outline: 2px solid rgba(234,246,255,0.9);
+        outline-offset: 1px;
+      }
+      .np-col:hover .np-bar { filter: brightness(1.18); }
+      .np-label {
+        font-size: 8px; line-height: 1; color: #9fc4d6;
+        font-variant-numeric: tabular-nums;
+      }
+      .nordpool-chart-tip {
+        position: absolute;
+        z-index: 5;
+        pointer-events: none;
+        padding: 5px 8px;
+        border-radius: 6px;
+        background: rgba(6,14,22,0.94);
+        border: 1px solid rgba(63,182,255,0.45);
+        color: #eaf6ff;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+      }
+      .nordpool-chart-tip.hidden { display: none; }
+      .nordpool-hours-row {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 10px;
+        align-items: center;
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255,255,255,0.1);
+      }
+      .nordpool-hours-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #d8e6ee;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+      }
+      .nordpool-hours-slider {
+        width: 100%;
+        accent-color: #3fb6ff;
+        cursor: pointer;
+      }
+      .nordpool-hours-value {
+        min-width: 1.6em;
+        text-align: right;
+        font-size: 12px;
+        font-weight: 700;
+        color: #eaf6ff;
       }
       .actions {
         display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0;
@@ -2110,12 +2541,26 @@ class AnkerScheduleEditor extends HTMLElement {
             <input type="checkbox" data-key="show_soc">
             SOC weergeven
           </label>
+          <label class="check-row">
+            <input type="checkbox" data-key="dynamische_energieprijzen">
+            Dynamische energieprijzen
+          </label>
+          <div class="hint">
+            Toont EPEX-grafiek en knoppen Goedkoopste / Duurste. Nord Pool-entity stel je in bij de integratie.
+          </div>
           <div class="row">
             <label>Transparantie achtergrond (%) (transparantie)</label>
             <input type="number" data-key="transparantie" min="0" max="100" step="1" placeholder="15">
           </div>
           <div class="hint">
             0 = dekking (geen transparantie), 100 = volledig doorzichtig. Standaard 15.
+          </div>
+          <div class="row">
+            <label>Aantal uren (aantal_uren)</label>
+            <input type="number" data-key="aantal_uren" min="1" max="24" step="1" placeholder="4">
+          </div>
+          <div class="hint">
+            Voor Goedkoopste / Duurste en de groene/rode markering in de grafiek. Ook via slider onder de grafiek.
           </div>
 
           <div class="hint">
@@ -2219,6 +2664,7 @@ class AnkerScheduleEditor extends HTMLElement {
         default_charge_soc: 100,
         default_discharge_soc: 10,
         transparantie: 15,
+        aantal_uren: 4,
       };
       Object.keys(numberKeys).forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
@@ -2227,12 +2673,16 @@ class AnkerScheduleEditor extends HTMLElement {
           if (input.value === "") return;
           const val = parseFloat(input.value);
           if (!Number.isFinite(val) || val < 0) return;
-          const clamped =
+          let clamped = val;
+          if (
             key === "transparantie" ||
             key === "default_charge_soc" ||
             key === "default_discharge_soc"
-              ? Math.max(0, Math.min(100, val))
-              : val;
+          ) {
+            clamped = Math.max(0, Math.min(100, val));
+          } else if (key === "aantal_uren") {
+            clamped = Math.max(1, Math.min(24, val));
+          }
           this._updateConfig({ [key]: clamped });
         });
         input.addEventListener("change", () => {
@@ -2245,12 +2695,14 @@ class AnkerScheduleEditor extends HTMLElement {
             key === "default_discharge_soc"
           ) {
             next = Math.max(0, Math.min(100, next));
+          } else if (key === "aantal_uren") {
+            next = Math.max(1, Math.min(24, next));
           }
           this._updateConfig({ [key]: next });
         });
       });
 
-      ["enabled", "auto_apply", "show_soc"].forEach((key) => {
+      ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen"].forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
         if (!input) return;
         input.addEventListener("change", () => {
@@ -2323,34 +2775,46 @@ class AnkerScheduleEditor extends HTMLElement {
       "default_charge_soc",
       "default_discharge_soc",
       "transparantie",
+      "aantal_uren",
     ].forEach((key) => {
       const input = this.querySelector(`input[data-key="${key}"]`);
       if (!input || this._isFocused(input)) return;
-      const val =
-        key === "transparantie"
-          ? Math.max(
-              0,
-              Math.min(
-                100,
-                Math.round(
-                  Number(
-                    this._config.transparantie ??
-                      this._config.transparency ??
-                      DEFAULTS.transparantie
-                  )
-                )
+      let val = this._config[key];
+      if (key === "transparantie") {
+        val = Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(
+              Number(
+                this._config.transparantie ??
+                  this._config.transparency ??
+                  DEFAULTS.transparantie
               )
             )
-          : this._config[key];
+          )
+        );
+      } else if (key === "aantal_uren") {
+        val = Math.max(
+          1,
+          Math.min(
+            24,
+            Math.round(Number(this._config.aantal_uren ?? DEFAULTS.aantal_uren))
+          )
+        );
+      }
       if (input.value !== String(val)) input.value = val;
     });
 
-    ["enabled", "auto_apply", "show_soc"].forEach((key) => {
+    ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen"].forEach((key) => {
       const input = this.querySelector(`input[data-key="${key}"]`);
       if (!input) return;
       let checked = !!this._config.enabled;
       if (key === "auto_apply") checked = !!this._raw.auto_apply;
       if (key === "show_soc") checked = !!this._config.show_soc;
+      if (key === "dynamische_energieprijzen") {
+        checked = this._config.dynamische_energieprijzen !== false;
+      }
       if (input.checked !== checked) input.checked = checked;
     });
 

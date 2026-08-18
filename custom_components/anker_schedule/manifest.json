@@ -1,7 +1,7 @@
 {
   "domain": "anker_schedule",
   "name": "Anker SOLIX Schedule",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "documentation": "https://github.com/Mediacj/anker-schedule",
   "codeowners": [
     "@Mediacj"

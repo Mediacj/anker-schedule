@@ -17,6 +17,7 @@ from .const import (
     CONF_MODE_ENTITY,
     CONF_NAME,
     CONF_NOM_SWITCH_ENTITY,
+    CONF_NORDPOOL_ENTITY,
     CONF_POWER_ENTITY,
     DEFAULT_NAME,
     DOMAIN,
@@ -76,6 +77,7 @@ class AnkerScheduleText(TextEntity):
             "charge_soc_entity": data.get(CONF_CHARGE_SOC_ENTITY),
             "discharge_soc_entity": data.get(CONF_DISCHARGE_SOC_ENTITY),
             "nom_switch_entity": data.get(CONF_NOM_SWITCH_ENTITY),
+            "nordpool_entity": data.get(CONF_NORDPOOL_ENTITY),
         }
 
     async def async_set_value(self, value: str) -> None:

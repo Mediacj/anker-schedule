@@ -25,6 +25,7 @@ from .const import (
     CONF_NAME,
     CONF_NOM_OPTION,
     CONF_NOM_SWITCH_ENTITY,
+    CONF_NORDPOOL_ENTITY,
     CONF_POWER_ENTITY,
     CONF_POWER_STEP,
     CONF_THIRD_PARTY_OPTION,
@@ -84,6 +85,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             CONF_NOM_SWITCH_ENTITY, "switch", d, DEFAULT_NOM_SWITCH
         )
     )
+    fields.update(_optional_entity_field(CONF_NORDPOOL_ENTITY, "sensor", d))
     fields.update(
         {
             vol.Optional(
