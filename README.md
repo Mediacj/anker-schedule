@@ -38,11 +38,11 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
 - installeer <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> in HACS
 - geef de entiteit van Nord Pool op tijdens de configuratie van de planner
 
-## Schermvoorbeeld
+## Schermvoorbeelden
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/35ded1c6-2660-4915-b470-2d219102dcb9" alt="Zendure Schedule card" width="360">
-  <img src="https://github.com/user-attachments/assets/67ec8eee-eb4e-4071-84b8-e81801ff56c5" alt="Zendure Schedule card" width="360">  
+  <img src="https://github.com/user-attachments/assets/979199c5-69cf-4c33-a390-223ef34aef5e" alt="Zendure Schedule card" width="360">
+  <img src="https://github.com/user-attachments/assets/6f416381-274c-4a93-bf48-c3b0d8b93226" alt="Zendure Schedule card" width="360">  
 </p>
 
 ## Installeren
