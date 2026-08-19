@@ -19,6 +19,8 @@
 **Home Assistant** custom integration met 24u-planner voor Anker Solix (NOM / laden / ontladen en een eigen script).
 
 - Eigen Lovelace-card
+- Dynamische tarieven (EPEX) ondersteuning met goedkoopste en duurste uren selectie (optioneel)
+- EPEX grafiek (optioneel)
 - Backend past elk uur toe — geen aparte automation nodig
 - Je kunt een eigen script als extra modus toevoegen
 - Kleuren en alle dashboard velden via visuele editor te bewerken
@@ -30,15 +32,22 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
 - werkt met de, <a href="https://energienerds.nl/index.php/2026/05/16/anker-solix-solarbank-max-ac-review" target="_blank" rel="noopener">Anker SOLIX Solarbank Max AC</a> en de <a href="https://energienerds.nl/index.php/2026/06/02/anker-solix-solarbank-4-e5000-pro-review" target="_blank" rel="noopener">Solarbank 4 E5000 PRO</a>
 - Geïnstalleerde <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a>
 
+**Let op:** EPEX tarieven is een optionele toevoeging die je in de configuratie van het dashboard aan of uit kunt zetten. Als je er gebruik van maakt moet je onderstaande randvoorwaarden ook uitvoeren:
+
+## Randvoorwaarden EPEX tarieven
+- installeer <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> in HACS
+- geef de entiteit van Nord Pool op tijdens de configuratie van de planner
+
 ## Schermvoorbeeld
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/dashboard.jpg" alt="Anker SOLIX Schedule card" width="720">
+  <img src="https://github.com/user-attachments/assets/35ded1c6-2660-4915-b470-2d219102dcb9" alt="Zendure Schedule card" width="360">
+  <img src="https://github.com/user-attachments/assets/67ec8eee-eb4e-4071-84b8-e81801ff56c5" alt="Zendure Schedule card" width="360">  
 </p>
 
 ## Installeren
 
-#Vergeet niet om eerst de <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a> te installeren, als je die nog niet hebt.
+#Vergeet niet om eerst de <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a> te installeren, als je die nog niet hebt. En  <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> als je met dynamische tarieven wilt werken.
 
 ### Snelste manier (HACS)
 
