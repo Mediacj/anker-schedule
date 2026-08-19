@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.34";
+const CARD_VERSION = "1.0.35";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -20,7 +20,7 @@ if (IS_FIRST_MODULE_LOAD) {
   );
 }
 
-/** Entity-keys horen in de integratie-config, niet in card-YAML. */
+/** Keys horen in de integratie-config, niet in card-YAML. */
 const ENTITY_CONFIG_KEYS = [
   "entity",
   "direction_entity",
@@ -32,9 +32,21 @@ const ENTITY_CONFIG_KEYS = [
   "storage_entity",
 ];
 
+/** Select-opties + settle ook alleen via integratie. */
+const OPTION_CONFIG_KEYS = [
+  "nom_option",
+  "third_party_option",
+  "charge_option",
+  "discharge_option",
+  "off_option",
+  "mode_settle_seconds",
+];
+
+const INTEGRATION_CONFIG_KEYS = [...ENTITY_CONFIG_KEYS, ...OPTION_CONFIG_KEYS];
+
 function stripEntityConfig(config) {
   const out = { ...(config || {}) };
-  ENTITY_CONFIG_KEYS.forEach((key) => {
+  INTEGRATION_CONFIG_KEYS.forEach((key) => {
     delete out[key];
   });
   return out;
@@ -135,6 +147,7 @@ const DEFAULTS = {
   show_soc: true,
   default_charge_soc: 100,
   default_discharge_soc: 10,
+  mode_settle_seconds: 5,
   nom_option: "0",
   third_party_option: "3",
   charge_option: "0",
@@ -185,6 +198,12 @@ class AnkerScheduleCard extends HTMLElement {
       // Runtime entity-ids komen uitsluitend uit de integratie (hydrate).
       ENTITY_CONFIG_KEYS.forEach((key) => {
         this._config[key] = "";
+      });
+      // Select-opties: defaults tot hydrate ze uit de integratie overschrijft.
+      OPTION_CONFIG_KEYS.forEach((key) => {
+        if (!(key in (clean || {}))) {
+          this._config[key] = DEFAULTS[key];
+        }
       });
       this._userConfig = stripEntityConfig(clean);
       this._config.transparantie = this._transparantie();
@@ -325,9 +344,30 @@ class AnkerScheduleCard extends HTMLElement {
         patch[key] = attrs[attrKey];
       }
     });
+    [
+      "nom_option",
+      "third_party_option",
+      "charge_option",
+      "discharge_option",
+      "off_option",
+      "mode_settle_seconds",
+    ].forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(attrs, key) && attrs[key] != null) {
+        patch[key] = attrs[key];
+      }
+    });
     if (Object.keys(patch).length) {
       this._config = { ...this._config, ...patch };
     }
+  }
+
+  /** Wachttijd na externe modus (ms); default 5s. */
+  _modeSettleMs() {
+    const n = Number(
+      this._config?.mode_settle_seconds ?? DEFAULTS.mode_settle_seconds
+    );
+    const sec = Number.isFinite(n) ? Math.max(0, Math.min(60, n)) : 5;
+    return Math.round(sec * 1000);
   }
 
   /**
@@ -1820,7 +1860,7 @@ class AnkerScheduleCard extends HTMLElement {
       this._config.entity,
       this._config.third_party_option || "3"
     );
-    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    await new Promise((resolve) => window.setTimeout(resolve, this._modeSettleMs()));
     await this._selectOption(
       this._config.direction_entity,
       this._config.charge_option || "0"
@@ -1927,7 +1967,7 @@ class AnkerScheduleCard extends HTMLElement {
         return ok(`${summary} toegepast`);
       }
 
-      // charge / discharge → third_party, 2s wachten, dan richting, dan vermogen
+      // charge / discharge → third_party, settle wachten, dan richting, dan vermogen
       if (slot.mode === "charge") {
         await this._applyThirdPartyCharge(slot.power);
       } else {
@@ -1935,7 +1975,7 @@ class AnkerScheduleCard extends HTMLElement {
           this._config.entity,
           this._config.third_party_option || "3"
         );
-        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        await new Promise((resolve) => window.setTimeout(resolve, this._modeSettleMs()));
         await this._selectOption(
           this._config.direction_entity,
           this._config.discharge_option || "1"
@@ -2433,7 +2473,7 @@ defineElement(TAG, AnkerScheduleCard);
 
 class AnkerScheduleEditor extends HTMLElement {
   setConfig(config) {
-    const hadEntityKeys = ENTITY_CONFIG_KEYS.some(
+    const hadEntityKeys = INTEGRATION_CONFIG_KEYS.some(
       (key) => config && Object.prototype.hasOwnProperty.call(config, key)
     );
     this._raw = stripEntityConfig(config);
@@ -2564,16 +2604,9 @@ class AnkerScheduleEditor extends HTMLElement {
           </div>
 
           <div class="hint">
-            Entities (bedrijfsmodus, vermogen, SOC, NOM-switch, schema) komen uit de
+            Entities, select-opties en wachttijd na externe modus komen uit de
             Anker Schedule-integratieconfiguratie — niet uit de card-YAML.
           </div>
-
-          <div class="section-title">Select-opties</div>
-          <div class="row"><label>NOM (nom_option)</label><input type="text" data-key="nom_option" placeholder="0"></div>
-          <div class="row"><label>Externe modus (third_party_option)</label><input type="text" data-key="third_party_option" placeholder="3"></div>
-          <div class="row"><label>Laden (charge_option)</label><input type="text" data-key="charge_option" placeholder="0"></div>
-          <div class="row"><label>Ontladen (discharge_option)</label><input type="text" data-key="discharge_option" placeholder="1"></div>
-          <div class="row"><label>Uit-penseel option (off_option)</label><input type="text" data-key="off_option" placeholder="(leeg = niets wijzigen)"></div>
 
           <div class="section-title">Vermogen</div>
           <div class="row"><label>Standaard vermogen (default_power)</label><input type="number" data-key="default_power" min="0" step="50"></div>
@@ -2639,11 +2672,6 @@ class AnkerScheduleEditor extends HTMLElement {
         "title",
         "nom_o_label",
         "nom_o_tag",
-        "nom_option",
-        "third_party_option",
-        "charge_option",
-        "discharge_option",
-        "off_option",
       ];
       textKeys.forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
@@ -2754,11 +2782,6 @@ class AnkerScheduleEditor extends HTMLElement {
       "title",
       "nom_o_label",
       "nom_o_tag",
-      "nom_option",
-      "third_party_option",
-      "charge_option",
-      "discharge_option",
-      "off_option",
     ];
     syncText.forEach((key) => {
       const input = this.querySelector(`input[data-key="${key}"]`);

@@ -11,14 +11,21 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CONF_CHARGE_OPTION,
     CONF_CHARGE_SOC_ENTITY,
     CONF_DIRECTION_ENTITY,
+    CONF_DISCHARGE_OPTION,
     CONF_DISCHARGE_SOC_ENTITY,
     CONF_MODE_ENTITY,
+    CONF_MODE_SETTLE_SECONDS,
     CONF_NAME,
+    CONF_NOM_OPTION,
     CONF_NOM_SWITCH_ENTITY,
     CONF_NORDPOOL_ENTITY,
+    CONF_OFF_OPTION,
     CONF_POWER_ENTITY,
+    CONF_THIRD_PARTY_OPTION,
+    DEFAULT_MODE_SETTLE_SECONDS,
     DEFAULT_NAME,
     DOMAIN,
 )
@@ -78,6 +85,14 @@ class AnkerScheduleText(TextEntity):
             "discharge_soc_entity": data.get(CONF_DISCHARGE_SOC_ENTITY),
             "nom_switch_entity": data.get(CONF_NOM_SWITCH_ENTITY),
             "nordpool_entity": data.get(CONF_NORDPOOL_ENTITY),
+            "nom_option": data.get(CONF_NOM_OPTION),
+            "third_party_option": data.get(CONF_THIRD_PARTY_OPTION),
+            "charge_option": data.get(CONF_CHARGE_OPTION),
+            "discharge_option": data.get(CONF_DISCHARGE_OPTION),
+            "off_option": data.get(CONF_OFF_OPTION, ""),
+            "mode_settle_seconds": data.get(
+                CONF_MODE_SETTLE_SECONDS, DEFAULT_MODE_SETTLE_SECONDS
+            ),
         }
 
     async def async_set_value(self, value: str) -> None:

@@ -25,6 +25,7 @@ from .const import (
     CONF_MAX_POWER,
     CONF_MIN_POWER,
     CONF_MODE_ENTITY,
+    CONF_MODE_SETTLE_SECONDS,
     CONF_NOM_OPTION,
     CONF_NOM_SWITCH_ENTITY,
     CONF_OFF_OPTION,
@@ -118,6 +119,16 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._cfg(CONF_DEFAULT_DISCHARGE_SOC, DEFAULT_DISCHARGE_SOC),
             DEFAULT_DISCHARGE_SOC,
         )
+
+    @property
+    def mode_settle_seconds(self) -> float:
+        """Wachttijd na externe modus voordat richting/vermogen gezet wordt."""
+        raw = self._cfg(CONF_MODE_SETTLE_SECONDS, DEFAULT_MODE_SETTLE_SECONDS)
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            value = float(DEFAULT_MODE_SETTLE_SECONDS)
+        return max(0.0, min(60.0, value))
 
     def _parse(self, raw: str | None) -> dict[str, Any] | None:
         return parse_compact(
@@ -393,7 +404,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         await self._async_select_option(mode_entity, third_party)
         if needs_settle:
-            await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
+            await asyncio.sleep(self.mode_settle_seconds)
         if dt_util.now().hour != hour:
             _LOGGER.info(
                 "Anker Schedule: uur gewisseld tijdens settle — "
@@ -540,7 +551,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass.async_create_task(self.async_apply_schedule(force=False))
 
         self._unsub_verify = async_call_later(
-            self.hass, DEFAULT_MODE_SETTLE_SECONDS + 1.0, _run
+            self.hass, self.mode_settle_seconds + 1.0, _run
         )
 
     async def async_apply_schedule(self, *, force: bool = False) -> None:
@@ -739,7 +750,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     await self._async_select_option(mode_entity, third_party)
                     if needs_settle:
-                        await asyncio.sleep(DEFAULT_MODE_SETTLE_SECONDS)
+                        await asyncio.sleep(self.mode_settle_seconds)
                     if dt_util.now().hour != hour:
                         _LOGGER.info(
                             "Anker Schedule: uur gewisseld tijdens settle — "

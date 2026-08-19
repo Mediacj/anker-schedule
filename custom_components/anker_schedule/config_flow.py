@@ -22,10 +22,12 @@ from .const import (
     CONF_MAX_POWER,
     CONF_MIN_POWER,
     CONF_MODE_ENTITY,
+    CONF_MODE_SETTLE_SECONDS,
     CONF_NAME,
     CONF_NOM_OPTION,
     CONF_NOM_SWITCH_ENTITY,
     CONF_NORDPOOL_ENTITY,
+    CONF_OFF_OPTION,
     CONF_POWER_ENTITY,
     CONF_POWER_STEP,
     CONF_THIRD_PARTY_OPTION,
@@ -36,9 +38,11 @@ from .const import (
     DEFAULT_DISCHARGE_SOC,
     DEFAULT_MAX_POWER,
     DEFAULT_MIN_POWER,
+    DEFAULT_MODE_SETTLE_SECONDS,
     DEFAULT_NAME,
     DEFAULT_NOM_OPTION,
     DEFAULT_NOM_SWITCH,
+    DEFAULT_OFF_OPTION,
     DEFAULT_POWER_STEP,
     DEFAULT_THIRD_PARTY_OPTION,
     DOMAIN,
@@ -106,6 +110,16 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_DISCHARGE_OPTION,
                 default=d.get(CONF_DISCHARGE_OPTION, DEFAULT_DISCHARGE_OPTION),
             ): str,
+            vol.Optional(
+                CONF_OFF_OPTION,
+                default=d.get(CONF_OFF_OPTION, DEFAULT_OFF_OPTION),
+            ): str,
+            vol.Optional(
+                CONF_MODE_SETTLE_SECONDS,
+                default=d.get(
+                    CONF_MODE_SETTLE_SECONDS, DEFAULT_MODE_SETTLE_SECONDS
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=60)),
             vol.Optional(
                 CONF_DEFAULT_POWER,
                 default=d.get(CONF_DEFAULT_POWER, DEFAULT_DEFAULT_POWER),
