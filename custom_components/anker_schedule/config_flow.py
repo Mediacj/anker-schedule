@@ -119,7 +119,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 default=d.get(
                     CONF_MODE_SETTLE_SECONDS, DEFAULT_MODE_SETTLE_SECONDS
                 ),
-            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=60)),
+            ): vol.All(vol.Coerce(int), vol.Range(min=2, max=10)),
             vol.Optional(
                 CONF_DEFAULT_POWER,
                 default=d.get(CONF_DEFAULT_POWER, DEFAULT_DEFAULT_POWER),

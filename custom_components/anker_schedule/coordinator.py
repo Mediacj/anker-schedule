@@ -122,13 +122,15 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def mode_settle_seconds(self) -> float:
-        """Wachttijd na externe modus voordat richting/vermogen gezet wordt."""
+        """Wachttijd na externe modus; ondergrens 2s, max 10s (0/uit → 2s)."""
         raw = self._cfg(CONF_MODE_SETTLE_SECONDS, DEFAULT_MODE_SETTLE_SECONDS)
         try:
             value = float(raw)
         except (TypeError, ValueError):
             value = float(DEFAULT_MODE_SETTLE_SECONDS)
-        return max(0.0, min(60.0, value))
+        if value < 2:
+            return 2.0
+        return min(10.0, value)
 
     def _parse(self, raw: str | None) -> dict[str, Any] | None:
         return parse_compact(

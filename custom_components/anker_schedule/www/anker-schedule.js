@@ -361,13 +361,14 @@ class AnkerScheduleCard extends HTMLElement {
     }
   }
 
-  /** Wachttijd na externe modus (ms); default 5s. */
+  /** Wachttijd na externe modus (ms); ondergrens 2s, max 10s. */
   _modeSettleMs() {
     const n = Number(
       this._config?.mode_settle_seconds ?? DEFAULTS.mode_settle_seconds
     );
-    const sec = Number.isFinite(n) ? Math.max(0, Math.min(60, n)) : 5;
-    return Math.round(sec * 1000);
+    const sec = Number.isFinite(n) ? n : 5;
+    const clamped = sec < 2 ? 2 : Math.min(10, sec);
+    return Math.round(clamped * 1000);
   }
 
   /**
@@ -586,6 +587,32 @@ class AnkerScheduleCard extends HTMLElement {
     };
   }
 
+  /** Prijspositie 0 (goedkoopst) → 1 (duurst) naar groen→rood (gedempt). */
+  _nordpoolGradientColor(price, min, max) {
+    const t = Math.max(0, Math.min(1, (Number(price) - min) / Math.max(0.001, max - min)));
+    // groen #1bdf62 → amber #f0c430 → rood #ff3b4a
+    const stops = [
+      { t: 0, r: 27, g: 223, b: 98 },
+      { t: 0.5, r: 240, g: 196, b: 48 },
+      { t: 1, r: 255, g: 59, b: 74 },
+    ];
+    let a = stops[0];
+    let b = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (t >= stops[i].t && t <= stops[i + 1].t) {
+        a = stops[i];
+        b = stops[i + 1];
+        break;
+      }
+    }
+    const u = (t - a.t) / Math.max(0.001, b.t - a.t);
+    const r = Math.round(a.r + (b.r - a.r) * u);
+    const g = Math.round(a.g + (b.g - a.g) * u);
+    const bl = Math.round(a.b + (b.b - a.b) * u);
+    // Gedempt zodat selectie (is-cheap/is-expensive) duidelijk blijft.
+    return `rgba(${r},${g},${bl},0.42)`;
+  }
+
   _hideNordpoolTip() {
     this._els?.nordpoolTip?.classList.add("hidden");
   }
@@ -660,9 +687,14 @@ class AnkerScheduleCard extends HTMLElement {
       } else {
         const pct = 12 + ((price - min) / span) * 88;
         col.style.setProperty("--h", `${pct}%`);
+        col.style.setProperty(
+          "--np-tone",
+          this._nordpoolGradientColor(price, min, max)
+        );
         if (cheap.has(h) && expensive.has(h)) col.classList.add("is-both");
         else if (cheap.has(h)) col.classList.add("is-cheap");
         else if (expensive.has(h)) col.classList.add("is-expensive");
+        else col.classList.add("is-tone");
         col.title = `${String(h).padStart(2, "0")}:00 · ${this._formatNordpoolPrice(price)}`;
         col.addEventListener("pointerenter", () => {
           this._showNordpoolTip(col, price, h);
@@ -2352,6 +2384,10 @@ class AnkerScheduleCard extends HTMLElement {
         background: rgba(159,196,214,0.45);
         box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
         transition: filter 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+      }
+      .np-col.is-tone .np-bar {
+        background: var(--np-tone, rgba(159,196,214,0.45));
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
       }
       .np-col.is-cheap .np-bar {
         background: #1bdf62;
