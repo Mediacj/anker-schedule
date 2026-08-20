@@ -164,6 +164,8 @@ const DEFAULTS = {
   transparantie: 15,
   // Toon EPEX-grafiek + Goedkoopste/Duurste
   dynamische_energieprijzen: true,
+  // EPEX-kolommen met groen→rood-verloop (uit = klassiek alleen top N)
+  epex_kleurrijk: true,
   // Aantal uren om te selecteren via Goedkoopste/Duurste
   aantal_uren: 4,
   colors: {
@@ -209,6 +211,7 @@ class AnkerScheduleCard extends HTMLElement {
       this._config.transparantie = this._transparantie();
       delete this._config.transparency;
       this._config.dynamische_energieprijzen = this._dynamischeEnergieprijzen();
+      this._config.epex_kleurrijk = this._epexKleurrijk();
       this._config.aantal_uren = this._aantalUren();
       this._selectedHours =
         this._selectedHours instanceof Set ? this._selectedHours : new Set();
@@ -424,6 +427,13 @@ class AnkerScheduleCard extends HTMLElement {
     if (this._config?.dynamische_energieprijzen === false) return false;
     if (this._config?.dynamische_energieprijzen === true) return true;
     return DEFAULTS.dynamische_energieprijzen;
+  }
+
+  /** EPEX-kolommen met prijsverloop; uit = klassiek alleen top N groen/rood. */
+  _epexKleurrijk() {
+    if (this._config?.epex_kleurrijk === false) return false;
+    if (this._config?.epex_kleurrijk === true) return true;
+    return DEFAULTS.epex_kleurrijk;
   }
 
   /** Aantal uren voor Goedkoopste/Duurste-selectie. */
@@ -660,8 +670,9 @@ class AnkerScheduleCard extends HTMLElement {
     const max = Math.max(...vals);
     const span = Math.max(0.001, max - min);
     const { cheap, expensive } = this._nordpoolRankSets(prices);
+    const kleurrijk = this._epexKleurrijk();
     const nowHour = new Date().getHours();
-    const sig = `${this._nordpoolEntityId()}|${this._aantalUren()}|${nowHour}|${prices
+    const sig = `${this._nordpoolEntityId()}|${this._aantalUren()}|${kleurrijk}|${nowHour}|${prices
       .map((row) => `${row.hour}:${row.price}`)
       .join(",")}`;
     if (
@@ -687,14 +698,16 @@ class AnkerScheduleCard extends HTMLElement {
       } else {
         const pct = 12 + ((price - min) / span) * 88;
         col.style.setProperty("--h", `${pct}%`);
-        col.style.setProperty(
-          "--np-tone",
-          this._nordpoolGradientColor(price, min, max)
-        );
         if (cheap.has(h) && expensive.has(h)) col.classList.add("is-both");
         else if (cheap.has(h)) col.classList.add("is-cheap");
         else if (expensive.has(h)) col.classList.add("is-expensive");
-        else col.classList.add("is-tone");
+        else if (kleurrijk) {
+          col.style.setProperty(
+            "--np-tone",
+            this._nordpoolGradientColor(price, min, max)
+          );
+          col.classList.add("is-tone");
+        }
         col.title = `${String(h).padStart(2, "0")}:00 · ${this._formatNordpoolPrice(price)}`;
         col.addEventListener("pointerenter", () => {
           this._showNordpoolTip(col, price, h);
@@ -2624,6 +2637,13 @@ class AnkerScheduleEditor extends HTMLElement {
           <div class="hint">
             Toont EPEX-grafiek en knoppen Goedkoopste / Duurste. Nord Pool-entity stel je in bij de integratie.
           </div>
+          <label class="check-row">
+            <input type="checkbox" data-key="epex_kleurrijk">
+            EPEX kleurrijk
+          </label>
+          <div class="hint">
+            Aan: prijsverloop groen→rood over alle uren. Uit: klassiek alleen de N goedkoopste/duurste gemarkeerd.
+          </div>
           <div class="row">
             <label>Transparantie achtergrond (%) (transparantie)</label>
             <input type="number" data-key="transparantie" min="0" max="100" step="1" placeholder="15">
@@ -2766,7 +2786,7 @@ class AnkerScheduleEditor extends HTMLElement {
         });
       });
 
-      ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen"].forEach((key) => {
+      ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen", "epex_kleurrijk"].forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
         if (!input) return;
         input.addEventListener("change", () => {
@@ -2865,7 +2885,7 @@ class AnkerScheduleEditor extends HTMLElement {
       if (input.value !== String(val)) input.value = val;
     });
 
-    ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen"].forEach((key) => {
+    ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen", "epex_kleurrijk"].forEach((key) => {
       const input = this.querySelector(`input[data-key="${key}"]`);
       if (!input) return;
       let checked = !!this._config.enabled;
@@ -2873,6 +2893,9 @@ class AnkerScheduleEditor extends HTMLElement {
       if (key === "show_soc") checked = !!this._config.show_soc;
       if (key === "dynamische_energieprijzen") {
         checked = this._config.dynamische_energieprijzen !== false;
+      }
+      if (key === "epex_kleurrijk") {
+        checked = this._config.epex_kleurrijk !== false;
       }
       if (input.checked !== checked) input.checked = checked;
     });
