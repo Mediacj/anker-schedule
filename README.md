@@ -41,7 +41,8 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
 ## Schermvoorbeeld
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/979199c5-69cf-4c33-a390-223ef34aef5e" alt="Zendure Schedule card 1" width="300">
+  <img width="300" alt="schermvoorbeeld" src="https://github.com/user-attachments/assets/6f009aea-b202-4423-8ba9-ea337959db0e" />
+  <img width="300" alt="schermvoorbeeld met selectie" src="https://github.com/user-attachments/assets/10d8be96-4f22-48ad-a339-68b81d508fe9" />
 </p>
 
 ## Installeren
