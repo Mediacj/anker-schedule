@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.35";
+const CARD_VERSION = "1.0.36";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -1195,15 +1195,15 @@ class AnkerScheduleCard extends HTMLElement {
             </div>
           </div>
 
-          <div class="brush-row" role="toolbar" aria-label="Modus toekennen">
+          <div class="hours" role="grid" aria-label="24 uur schema"></div>
+
+          <div class="brush-row hidden" role="toolbar" aria-label="Modus toekennen">
             <button type="button" class="brush" data-brush="off" disabled>Uit</button>
             <button type="button" class="brush" data-brush="nom" disabled>NOM</button>
             <button type="button" class="brush" data-brush="nom_o" disabled>NOM-O</button>
             <button type="button" class="brush" data-brush="charge" disabled>Laden</button>
             <button type="button" class="brush" data-brush="discharge" disabled>Ontladen</button>
           </div>
-
-          <div class="hours" role="grid" aria-label="24 uur schema"></div>
 
           <div class="editor-panel hidden">
             <div class="editor-head">
@@ -1669,6 +1669,7 @@ class AnkerScheduleCard extends HTMLElement {
     this._hourButtons?.forEach((_, h) => this._updateHourButton(h));
 
     const armed = this._hasSelection();
+    this._els.brushRow?.classList.toggle("hidden", !armed);
     this._els.brushRow?.classList.toggle("has-selection", armed);
     this._els.brushes.forEach((btn) => {
       btn.disabled = !armed;
@@ -2169,8 +2170,9 @@ class AnkerScheduleCard extends HTMLElement {
       }
       .brush-row {
         display: grid; grid-template-columns: repeat(5, 1fr);
-        gap: 6px; margin-bottom: 12px;
+        gap: 6px; margin-top: 12px; margin-bottom: 10px;
       }
+      .brush-row.hidden { display: none; }
       .brush {
         appearance: none; border: 1px solid rgba(255,255,255,0.28);
         background: rgba(255,255,255,0.08); color: #d8e6ee;
