@@ -20,7 +20,7 @@
 
 - Eigen Lovelace-card
 - Dynamische tarieven (EPEX) ondersteuning met goedkoopste en duurste uren selectie (optioneel)
-- EPEX grafiek (optioneel)
+- EPEX grafiek met energiebelasting en kosten of zonder(optioneel)
 - Backend past elk uur toe — geen aparte automation nodig
 - Je kunt een eigen script als extra modus toevoegen
 - Kleuren en alle dashboard velden via visuele editor te bewerken
