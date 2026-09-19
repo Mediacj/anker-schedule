@@ -41,8 +41,8 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
 ## Schermvoorbeelden
 
 <p align="center">
-  <img width="300" alt="schermvoorbeeld" src="https://github.com/user-attachments/assets/6f009aea-b202-4423-8ba9-ea337959db0e" />
-  <img width="300" alt="schermvoorbeeld met selectie" src="https://github.com/user-attachments/assets/10d8be96-4f22-48ad-a339-68b81d508fe9" />
+  <img width="340" alt="schermvoorbeeld" src="https://github.com/user-attachments/assets/6f009aea-b202-4423-8ba9-ea337959db0e" />
+  <img width="340" alt="schermvoorbeeld met selectie" src="https://github.com/user-attachments/assets/10d8be96-4f22-48ad-a339-68b81d508fe9" />
 </p>
 
 ## Installeren
