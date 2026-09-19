@@ -38,7 +38,7 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
 - installeer <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> in HACS
 - geef de entiteit van Nord Pool op tijdens de configuratie van de planner
 
-## Schermvoorbeeld
+## Schermvoorbeelden
 
 <p align="center">
   <img width="300" alt="schermvoorbeeld" src="https://github.com/user-attachments/assets/6f009aea-b202-4423-8ba9-ea337959db0e" />
