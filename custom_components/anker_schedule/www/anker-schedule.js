@@ -168,6 +168,10 @@ const DEFAULTS = {
   epex_kleurrijk: true,
   // Aantal uren om te selecteren via Goedkoopste/Duurste
   aantal_uren: 4,
+  // EPEX-uurprijzen standaard inclusief energiebelasting; uit = trek eb_en_kosten af
+  incl_eb: true,
+  // Energiebelasting + eventuele extra kosten (€/kWh) bij excl. EB
+  eb_en_kosten: 0.1108481,
   colors: {
     nom: "#1b8a3a",
     nom_o: "#00e5c0",
@@ -213,6 +217,17 @@ class AnkerScheduleCard extends HTMLElement {
       this._config.dynamische_energieprijzen = this._dynamischeEnergieprijzen();
       this._config.epex_kleurrijk = this._epexKleurrijk();
       this._config.aantal_uren = this._aantalUren();
+      // Migratie oude YAML-keys
+      if (clean && clean.incl_eb === undefined && clean.incl_btw !== undefined) {
+        this._config.incl_eb = clean.incl_btw;
+      }
+      if (clean && clean.eb_en_kosten === undefined && clean.btw_en_kosten !== undefined) {
+        this._config.eb_en_kosten = clean.btw_en_kosten;
+      }
+      this._config.incl_eb = this._inclEb();
+      this._config.eb_en_kosten = this._ebEnKosten();
+      delete this._config.incl_btw;
+      delete this._config.btw_en_kosten;
       this._selectedHours =
         this._selectedHours instanceof Set ? this._selectedHours : new Set();
       this._activeMode = this._activeMode ?? null;
@@ -475,10 +490,71 @@ class AnkerScheduleCard extends HTMLElement {
     const n = this._aantalUren();
     const slider = this._els?.nordpoolHoursSlider;
     const valueEl = this._els?.nordpoolHoursValue;
+    const incl = this._els?.nordpoolInclEb;
     if (slider && this.shadowRoot?.activeElement !== slider) {
       slider.value = String(n);
     }
     if (valueEl) valueEl.textContent = String(n);
+    if (incl && this.shadowRoot?.activeElement !== incl) {
+      incl.checked = this._inclEb();
+    }
+  }
+
+  /** EPEX-uurprijzen inclusief energiebelasting tonen (default aan). */
+  _inclEb() {
+    const raw =
+      this._config?.incl_eb !== undefined
+        ? this._config.incl_eb
+        : this._config?.incl_btw;
+    if (raw === false) return false;
+    if (raw === true) return true;
+    return DEFAULTS.incl_eb;
+  }
+
+  /** Energiebelasting + eventuele extra kosten in €/kWh (default 0.1108481). */
+  _ebEnKosten() {
+    const raw =
+      this._config?.eb_en_kosten ??
+      this._config?.btw_en_kosten ??
+      DEFAULTS.eb_en_kosten;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return DEFAULTS.eb_en_kosten;
+    return n;
+  }
+
+  /** Bedrag dat van de sensorprijs af gaat (0 als incl. EB). */
+  _nordpoolEbAdjustment() {
+    if (this._inclEb()) return 0;
+    let fee = this._ebEnKosten();
+    const entityId = this._nordpoolEntityId();
+    const attrs = this._hass?.states?.[entityId]?.attributes || {};
+    if (attrs.price_in_cents) fee *= 100;
+    return fee;
+  }
+
+  _setInclEbFromUi(checked, { persist = false } = {}) {
+    const value = !!checked;
+    this._config.incl_eb = value;
+    this._userConfig = stripEntityConfig({
+      ...(this._userConfig || {}),
+      incl_eb: value,
+    });
+    delete this._userConfig.incl_btw;
+    if (this._els?.nordpoolInclEb) {
+      this._els.nordpoolInclEb.checked = value;
+    }
+    // Forceer altijd een volledige grafiek-rebuild (absolute schaal wijzigt).
+    this._lastNordpoolChartSig = "";
+    this._renderNordpoolChart({ force: true });
+    if (persist) {
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: { ...this._userConfig } },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }
   }
 
   _nordpoolEntityId() {
@@ -488,11 +564,14 @@ class AnkerScheduleCard extends HTMLElement {
   /**
    * Gemiddelde prijs per uur (0–23) uit Nord Pool today/raw_today.
    * Ondersteunt 15-min (96) en uurlijkse (24) series.
+   * Bij incl_eb=false wordt eb_en_kosten van elke uurprijs afgetrokken.
    */
   _nordpoolHourlyPrices() {
     const entityId = this._nordpoolEntityId();
     if (!entityId || !this._hass?.states?.[entityId]) return null;
     const attrs = this._hass.states[entityId].attributes || {};
+
+    let rows = null;
 
     if (Array.isArray(attrs.raw_today) && attrs.raw_today.length) {
       const buckets = Array.from({ length: 24 }, () => []);
@@ -504,7 +583,7 @@ class AnkerScheduleCard extends HTMLElement {
         }
         buckets[start.getHours()].push(val);
       }
-      return buckets
+      rows = buckets
         .map((vals, hour) =>
           vals.length
             ? {
@@ -514,38 +593,43 @@ class AnkerScheduleCard extends HTMLElement {
             : null
         )
         .filter(Boolean);
-    }
+    } else {
+      const today = attrs.today;
+      if (!Array.isArray(today) || !today.length) return null;
 
-    const today = attrs.today;
-    if (!Array.isArray(today) || !today.length) return null;
-
-    if (today.length >= 96) {
-      const out = [];
-      for (let h = 0; h < 24; h++) {
-        const slice = today
-          .slice(h * 4, h * 4 + 4)
-          .map(Number)
-          .filter(Number.isFinite);
-        if (slice.length) {
-          out.push({
-            hour: h,
-            price: slice.reduce((a, b) => a + b, 0) / slice.length,
-          });
+      if (today.length >= 96) {
+        const out = [];
+        for (let h = 0; h < 24; h++) {
+          const slice = today
+            .slice(h * 4, h * 4 + 4)
+            .map(Number)
+            .filter(Number.isFinite);
+          if (slice.length) {
+            out.push({
+              hour: h,
+              price: slice.reduce((a, b) => a + b, 0) / slice.length,
+            });
+          }
         }
+        rows = out.length ? out : null;
+      } else if (today.length >= 24) {
+        const out = [];
+        for (let h = 0; h < 24; h++) {
+          const price = Number(today[h]);
+          if (Number.isFinite(price)) out.push({ hour: h, price });
+        }
+        rows = out.length ? out : null;
       }
-      return out.length ? out : null;
     }
 
-    if (today.length >= 24) {
-      const out = [];
-      for (let h = 0; h < 24; h++) {
-        const price = Number(today[h]);
-        if (Number.isFinite(price)) out.push({ hour: h, price });
-      }
-      return out.length ? out : null;
-    }
+    if (!rows?.length) return null;
 
-    return null;
+    const fee = this._nordpoolEbAdjustment();
+    if (!fee) return rows;
+    return rows.map((row) => ({
+      ...row,
+      price: row.price - fee,
+    }));
   }
 
   /** Selecteer de N goedkoopste of duurste uren van vandaag (geen modus zetten). */
@@ -642,7 +726,8 @@ class AnkerScheduleCard extends HTMLElement {
     tip.style.top = `${Math.max(4, colBox.top - chartBox.top - 28)}px`;
   }
 
-  _renderNordpoolChart() {
+  _renderNordpoolChart(opts = {}) {
+    const force = !!opts.force;
     const wrap = this._els?.nordpoolChart;
     const bars = this._els?.nordpoolBars;
     if (!wrap || !bars) return;
@@ -666,26 +751,36 @@ class AnkerScheduleCard extends HTMLElement {
 
     const byHour = new Map(prices.map((row) => [row.hour, row.price]));
     const vals = prices.map((row) => row.price);
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
+    // Absolute schaal t.o.v. 0, zodat aftrekken van eb_en_kosten de kolommen
+    // zichtbaar wijzigt (relatieve min→max blijft bij een vaste aftrek gelijk).
+    const dataMin = Math.min(...vals);
+    const dataMax = Math.max(...vals);
+    const min = Math.min(0, dataMin);
+    const max = Math.max(dataMax, min + 0.001);
     const span = Math.max(0.001, max - min);
     const { cheap, expensive } = this._nordpoolRankSets(prices);
     const kleurrijk = this._epexKleurrijk();
+    const inclEb = this._inclEb();
     const nowHour = new Date().getHours();
-    const sig = `${this._nordpoolEntityId()}|${this._aantalUren()}|${kleurrijk}|${nowHour}|${prices
+    const sig = `${this._nordpoolEntityId()}|${this._aantalUren()}|${kleurrijk}|${inclEb}|${this._ebEnKosten()}|${nowHour}|${prices
       .map((row) => `${row.hour}:${row.price}`)
       .join(",")}`;
     if (
+      !force &&
       sig === this._lastNordpoolChartSig &&
       bars.childElementCount === 24 &&
       !wrap.classList.contains("hidden")
     ) {
+      this._syncNordpoolHoursUi();
       return;
     }
     this._lastNordpoolChartSig = sig;
 
     if (this._els.nordpoolUnit) {
-      this._els.nordpoolUnit.textContent = this._nordpoolPriceUnit();
+      const unit = this._nordpoolPriceUnit();
+      this._els.nordpoolUnit.textContent = inclEb
+        ? unit
+        : `${unit} · excl. EB`;
     }
 
     bars.innerHTML = "";
@@ -696,15 +791,15 @@ class AnkerScheduleCard extends HTMLElement {
       if (!Number.isFinite(price)) {
         col.classList.add("is-empty");
       } else {
-        const pct = 12 + ((price - min) / span) * 88;
-        col.style.setProperty("--h", `${pct}%`);
+        const pct = 8 + ((price - min) / span) * 92;
+        col.style.setProperty("--h", `${Math.max(4, pct)}%`);
         if (cheap.has(h) && expensive.has(h)) col.classList.add("is-both");
         else if (cheap.has(h)) col.classList.add("is-cheap");
         else if (expensive.has(h)) col.classList.add("is-expensive");
         else if (kleurrijk) {
           col.style.setProperty(
             "--np-tone",
-            this._nordpoolGradientColor(price, min, max)
+            this._nordpoolGradientColor(price, dataMin, dataMax)
           );
           col.classList.add("is-tone");
         }
@@ -1265,6 +1360,10 @@ class AnkerScheduleCard extends HTMLElement {
               <label class="nordpool-hours-label" for="as-np-hours">Aantal uren</label>
               <input id="as-np-hours" class="nordpool-hours-slider" type="range" min="1" max="24" step="1" value="4">
               <span class="nordpool-hours-value">4</span>
+              <label class="nordpool-incl-eb" title="Incl. energiebelasting. Uit: trek eb_en_kosten van de uurprijzen af">
+                <input class="nordpool-incl-eb-check" type="checkbox" checked>
+                <span>incl. EB</span>
+              </label>
             </div>
           </div>
 
@@ -1312,6 +1411,7 @@ class AnkerScheduleCard extends HTMLElement {
       nordpoolTip: card.querySelector(".nordpool-chart-tip"),
       nordpoolHoursSlider: card.querySelector(".nordpool-hours-slider"),
       nordpoolHoursValue: card.querySelector(".nordpool-hours-value"),
+      nordpoolInclEb: card.querySelector(".nordpool-incl-eb-check"),
       pickCheapBtn: card.querySelector('[data-action="pick-cheap"]'),
       pickExpensiveBtn: card.querySelector('[data-action="pick-expensive"]'),
     };
@@ -1321,6 +1421,11 @@ class AnkerScheduleCard extends HTMLElement {
     });
     this._els.nordpoolHoursSlider?.addEventListener("change", () => {
       this._setAantalUrenFromUi(this._els.nordpoolHoursSlider.value, {
+        persist: true,
+      });
+    });
+    this._els.nordpoolInclEb?.addEventListener("change", () => {
+      this._setInclEbFromUi(this._els.nordpoolInclEb.checked, {
         persist: true,
       });
     });
@@ -2442,8 +2547,8 @@ class AnkerScheduleCard extends HTMLElement {
       .nordpool-chart-tip.hidden { display: none; }
       .nordpool-hours-row {
         display: grid;
-        grid-template-columns: auto 1fr auto;
-        gap: 10px;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        gap: 8px;
         align-items: center;
         margin-top: 10px;
         padding-top: 8px;
@@ -2458,6 +2563,8 @@ class AnkerScheduleCard extends HTMLElement {
       }
       .nordpool-hours-slider {
         width: 100%;
+        min-width: 0;
+        max-width: 100%;
         accent-color: #3fb6ff;
         cursor: pointer;
       }
@@ -2467,6 +2574,25 @@ class AnkerScheduleCard extends HTMLElement {
         font-size: 12px;
         font-weight: 700;
         color: #eaf6ff;
+      }
+      .nordpool-incl-eb {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin: 0;
+        font-size: 11px;
+        font-weight: 600;
+        color: #d8e6ee;
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+      }
+      .nordpool-incl-eb-check {
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        accent-color: #3fb6ff;
+        cursor: pointer;
       }
       .actions {
         display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0;
@@ -2660,6 +2786,21 @@ class AnkerScheduleEditor extends HTMLElement {
           <div class="hint">
             Voor Goedkoopste / Duurste en de groene/rode markering in de grafiek. Ook via slider onder de grafiek.
           </div>
+          <label class="check-row">
+            <input type="checkbox" data-key="incl_eb">
+            Incl. EB / energiebelasting (incl_eb)
+          </label>
+          <div class="hint">
+            Aan: EPEX-uurprijzen inclusief energiebelasting. Uit: trek eb_en_kosten af. Ook via vinkje “incl. EB” onder de grafiek.
+          </div>
+          <div class="row">
+            <label>EB en kosten €/kWh (eb_en_kosten)</label>
+            <input type="number" data-key="eb_en_kosten" min="0" step="0.0000001" placeholder="0.1108481">
+          </div>
+          <div class="hint">
+            Energiebelasting per kWh die bij uitgevinkt “incl. EB” van elke uurprijs wordt afgetrokken.
+            Behalve energiebelasting kun je hier ook extra kosten per kWh opvoeren. Standaard 0.1108481.
+          </div>
 
           <div class="hint">
             Entities, select-opties en wachttijd na externe modus komen uit de
@@ -2751,6 +2892,7 @@ class AnkerScheduleEditor extends HTMLElement {
         default_discharge_soc: 10,
         transparantie: 15,
         aantal_uren: 4,
+        eb_en_kosten: 0.1108481,
       };
       Object.keys(numberKeys).forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
@@ -2788,7 +2930,7 @@ class AnkerScheduleEditor extends HTMLElement {
         });
       });
 
-      ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen", "epex_kleurrijk"].forEach((key) => {
+      ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen", "epex_kleurrijk", "incl_eb"].forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
         if (!input) return;
         input.addEventListener("change", () => {
@@ -2857,6 +2999,7 @@ class AnkerScheduleEditor extends HTMLElement {
       "default_discharge_soc",
       "transparantie",
       "aantal_uren",
+      "eb_en_kosten",
     ].forEach((key) => {
       const input = this.querySelector(`input[data-key="${key}"]`);
       if (!input || this._isFocused(input)) return;
@@ -2883,11 +3026,18 @@ class AnkerScheduleEditor extends HTMLElement {
             Math.round(Number(this._config.aantal_uren ?? DEFAULTS.aantal_uren))
           )
         );
+      } else if (key === "eb_en_kosten") {
+        const n = Number(
+          this._config.eb_en_kosten ??
+            this._config.btw_en_kosten ??
+            DEFAULTS.eb_en_kosten
+        );
+        val = Number.isFinite(n) && n >= 0 ? n : DEFAULTS.eb_en_kosten;
       }
       if (input.value !== String(val)) input.value = val;
     });
 
-    ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen", "epex_kleurrijk"].forEach((key) => {
+    ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen", "epex_kleurrijk", "incl_eb"].forEach((key) => {
       const input = this.querySelector(`input[data-key="${key}"]`);
       if (!input) return;
       let checked = !!this._config.enabled;
@@ -2898,6 +3048,9 @@ class AnkerScheduleEditor extends HTMLElement {
       }
       if (key === "epex_kleurrijk") {
         checked = this._config.epex_kleurrijk !== false;
+      }
+      if (key === "incl_eb") {
+        checked = this._config.incl_eb !== false;
       }
       if (input.checked !== checked) input.checked = checked;
     });
@@ -2929,6 +3082,11 @@ class AnkerScheduleEditor extends HTMLElement {
         raw[key] = patch[key];
       }
     });
+    // Oude BTW-keys opruimen na hernoeming naar EB
+    if ("incl_eb" in raw || "eb_en_kosten" in raw) {
+      delete raw.incl_btw;
+      delete raw.btw_en_kosten;
+    }
     this._raw = raw;
     this._config = {
       ...DEFAULTS,
