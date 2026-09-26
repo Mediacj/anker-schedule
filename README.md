@@ -76,6 +76,67 @@ Welke velden van de officiële Anker Solix-integratie je daarvoor kiest:
   <img src="https://raw.githubusercontent.com/Mediacj/anker-schedule/main/images/installatie-entities.jpg" alt="Welke Anker Solix-entities bij installatie van Anker SOLIX Schedule" width="900">
 </p>
 
+Extra toelichting op de velden:
+
+<table>
+  <thead>
+    <tr style="background-color: #0af5ba;">
+      <th>ENERGIENERDS PLANNER</th>
+      <th>Anker SOLIX HA INTEGRATIE</th>   
+      <th>TOELICHTING</th>      
+      <th>VOORBEELD</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Bedrijfsmodus select</td>
+      <td>Bedrijfsmodus</td>
+      <td>zoek het veld dat begint met: 'select.anker_solix' met verderop in de entity: 'bedrijfsmodus'</td>      
+      <td>select.anker_solix_device_[IPADRES]_bedrijfsmodus_apparaat_werkt_in_externe_modus</td>
+    </tr>
+    <tr>
+      <td>Laad/ontlaadregeling select</td>
+      <td>Netvermogen</td>      
+      <td>zoek naar: 'laad_ontlaadregeling' </td>     
+      <td>select.anker_solix_device_[IPADRES]_laad_ontlaadregeling</td> 
+    </tr>
+    <tr>
+      <td>Vermogen number</td>
+      <td>Ingestelde laad-/ontlaadvermogen</td>
+      <td>zoek naar: 'ingestelde_laad_ontlaadvermogen'</td>        
+      <td>number.anker_solix_device_[IPADRES]_ingestelde_laad_ontlaadvermogen</td>      
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>      
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>      
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>      
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>      
+    </tr>    
+    <tr>
+  </tbody>
+</table>
+
+
+
+
 ## Dashboard card
 
 <b>NOM-O Modus</b>
