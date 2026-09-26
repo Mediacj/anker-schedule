@@ -102,21 +102,21 @@ Extra toelichting op de velden:
     </tr>
     <tr>
       <td>Vermogen number</td>
-      <td>Ingestelde laad-/ontlaadvermogen</td>
+      <td>Vermogensbesturing</td>
       <td>zoek naar: 'ingestelde_laad_ontlaadvermogen'</td>        
       <td>number.anker_solix_device_[IPADRES]_ingestelde_laad_ontlaadvermogen</td>      
     </tr>
     <tr>
-      <td></td>
-      <td></td>
-      <td></td>
-      <td></td>      
+      <td>Max SOC laden</td>
+      <td>Maximale laadlimiet</td>
+      <td>Je vult hier het veld in dat begint met number en de term: 'maximale_laadlimiet' bevat.</td>
+      <td>number.anker_solix_device_[IPADRES]_maximale_laadlimiet</td>      
     </tr>
     <tr>
-      <td></td>
-      <td></td>
-      <td></td>
-      <td></td>      
+      <td>Min SOC ontladen</td>
+      <td>Maximale laadlimiet</td>
+      <td>Je vult hier het veld in dat begint met number en de term: 'ontladingslimiet' bevat.</td>
+      <td>number.anker_solix_device_[IPADRES]_ontladingslimiet</td>       
     </tr>
     <tr>
       <td></td>
