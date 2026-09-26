@@ -114,7 +114,7 @@ Extra toelichting op de velden:
     </tr>
     <tr>
       <td>Min SOC ontladen</td>
-      <td>Maximale laadlimiet</td>
+      <td>Ontladingslimiet</td>
       <td>Je vult hier het veld in dat begint met number en de term: 'ontladingslimiet' bevat.</td>
       <td>number.anker_solix_device_[IPADRES]_ontladingslimiet</td>       
     </tr>   
