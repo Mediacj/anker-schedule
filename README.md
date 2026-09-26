@@ -117,20 +117,7 @@ Extra toelichting op de velden:
       <td>Maximale laadlimiet</td>
       <td>Je vult hier het veld in dat begint met number en de term: 'ontladingslimiet' bevat.</td>
       <td>number.anker_solix_device_[IPADRES]_ontladingslimiet</td>       
-    </tr>
-    <tr>
-      <td></td>
-      <td></td>
-      <td></td>
-      <td></td>      
-    </tr>
-    <tr>
-      <td></td>
-      <td></td>
-      <td></td>
-      <td></td>      
-    </tr>    
-    <tr>
+    </tr>   
   </tbody>
 </table>
 
