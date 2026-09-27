@@ -140,6 +140,8 @@ Tip: Je kunt elk gewenst script aan deze modus koppelen én de weergavenaam aanp
 
 ### Dahboard opties:
 
+Je kunt de planner eenvoudig toevoegen door je dashboard te bewerken en te zoeken naar de 'schedule' kaart.
+
 Minimaal is onderstaande yaml genoeg:
 
 ```yaml
