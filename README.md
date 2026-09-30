@@ -124,7 +124,7 @@ Extra toelichting op de velden:
 
 
 
-## Dashboard card
+## Dashboard lovelace card
 
 <b>NOM-O Modus</b>
 
@@ -140,9 +140,12 @@ Tip: Je kunt elk gewenst script aan deze modus koppelen én de weergavenaam aanp
 
 ### Dahboard opties:
 
-Je kunt de planner eenvoudig toevoegen door je dashboard te bewerken en te zoeken naar de 'schedule' kaart.
+Je kunt de planner eenvoudig toevoegen door je dashboard te bewerken en te zoeken naar de 'schedule' kaart:
 
-Minimaal is onderstaande yaml genoeg:
+<img width="1028" height="755" alt="image" src="https://github.com/user-attachments/assets/5e9ebd54-b180-4340-9158-9c5959e4cdea" />
+
+
+Of als je flexibel wilt zijn kun je ook met yaml werken, minimaal is onderstaande yaml genoeg:
 
 ```yaml
 type: custom:anker-schedule
