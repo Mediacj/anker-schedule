@@ -4,12 +4,17 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   upload-hacs-zip:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Create Zip Archive
         run: |
@@ -19,6 +24,8 @@ jobs:
       - name: Upload Zip to Release Assets
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.release.tag_name }}
           files: anker_schedule.zip
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
