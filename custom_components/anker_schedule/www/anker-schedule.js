@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.36";
+const CARD_VERSION = "1.0.37";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -2062,18 +2062,8 @@ class AnkerScheduleCard extends HTMLElement {
     const summary = this._describeSlot(hour, slot);
 
     if (!this._enabled) {
-      const offKey = `${hour}:disabled`;
-      if (!force && this._lastAppliedKey === offKey) {
-        return ok("Planner staat uit — niets gewijzigd");
-      }
-      try {
-        await this._setNomSwitch(false);
-        this._lastAppliedKey = offKey;
-      } catch (err) {
-        console.error("Anker Schedule Card: nom switch off failed", err);
-        return fail("NOM-switch uitzetten mislukt");
-      }
-      return ok("Planner staat uit — NOM-switch uit");
+      this._lastAppliedKey = `${hour}:disabled`;
+      return ok("Planner staat uit — niets gewijzigd");
     }
 
     const { socMax, socMin } = this._slotSocs(slot);

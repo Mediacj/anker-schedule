@@ -251,6 +251,10 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @callback
     def _async_hourly_tick(self, _now: datetime) -> None:
+        # Planner uit: geen uur-apply — laat externe scripts (bijv. NOM-O) met rust.
+        if not bool(self.data.get("enabled", True)):
+            _LOGGER.debug("Anker Schedule planner uit — uur-tick overgeslagen")
+            return
         # Uurwisseling: toepassen. Zelfde modus als vorig uur → geen force
         # (modus loopt door; alleen power/SOC-delta of drift wordt gezet).
         hour = dt_util.now().hour
@@ -280,6 +284,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         hour = dt_util.now().hour
         slot = self.data["hours"][hour]
+        enabled = bool(self.data.get("enabled", True))
         self.data = {
             **self.data,
             "current_mode": slot["mode"],
@@ -287,6 +292,14 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "current_soc": int(slot.get("soc", 0)) if slot["mode"] != MODE_OFF else 0,
             "current_hour": hour,
         }
+
+        # Planner uit: geen achtergrond-writes (ook geen NOM-switch).
+        if not enabled:
+            _LOGGER.debug(
+                "Anker Schedule planner uit — minutencheck overgeslagen"
+            )
+            self.async_set_updated_data(self.data)
+            return self.data
 
         # Huidig uur = uit: stand-by — geen drift-check / geen mode-herstel.
         if slot.get("mode") == MODE_OFF:
@@ -584,14 +597,24 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.async_set_updated_data(self.data)
 
         if not enabled:
-            key = f"{hour}:disabled"
-            if not force and self._last_applied_key == key:
-                return
-            try:
-                await self._async_set_nom_switch(False)
-                self._last_applied_key = key
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Anker NOM-switch uitzetten mislukt")
+            # Planner uit: geen entity-writes (NOM-switch, mode, power, …).
+            # Externe scripts/automations mogen ongestoord doorlopen.
+            self.data = {
+                **self.data,
+                "current_mode": MODE_OFF,
+                "current_power": 0,
+                "current_soc": 0,
+                "current_soc_max": 0,
+                "current_soc_min": 0,
+                "current_hour": hour,
+            }
+            self.async_set_updated_data(self.data)
+            self._cancel_verify()
+            self._last_applied_key = "disabled"
+            self._last_mode_key = None
+            _LOGGER.debug(
+                "Anker Schedule planner uit — geen apply (force=%s)", force
+            )
             return
 
         mode_entity = str(self._cfg(CONF_MODE_ENTITY, ""))
