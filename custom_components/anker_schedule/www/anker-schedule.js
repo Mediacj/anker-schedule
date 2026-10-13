@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.37";
+const CARD_VERSION = "1.0.38";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -168,10 +168,10 @@ const DEFAULTS = {
   epex_kleurrijk: true,
   // Aantal uren om te selecteren via Goedkoopste/Duurste
   aantal_uren: 4,
-  // EPEX-uurprijzen standaard inclusief energiebelasting; uit = trek eb_en_kosten af
+  // Incl. EB: tel eb_en_kosten bij de kale Nordpool-prijs (alleen als ingevuld)
   incl_eb: true,
-  // Energiebelasting + eventuele extra kosten (€/kWh) bij excl. EB
-  eb_en_kosten: 0.1108481,
+  // Energiebelasting + eventuele extra kosten (€/kWh); leeg = niet toepassen
+  eb_en_kosten: null,
   colors: {
     nom: "#1b8a3a",
     nom_o: "#00e5c0",
@@ -225,7 +225,11 @@ class AnkerScheduleCard extends HTMLElement {
         this._config.eb_en_kosten = clean.btw_en_kosten;
       }
       this._config.incl_eb = this._inclEb();
-      this._config.eb_en_kosten = this._ebEnKosten();
+      {
+        const eb = this._ebEnKosten();
+        if (eb == null) delete this._config.eb_en_kosten;
+        else this._config.eb_en_kosten = eb;
+      }
       delete this._config.incl_btw;
       delete this._config.btw_en_kosten;
       this._selectedHours =
@@ -511,21 +515,23 @@ class AnkerScheduleCard extends HTMLElement {
     return DEFAULTS.incl_eb;
   }
 
-  /** Energiebelasting + eventuele extra kosten in €/kWh (default 0.1108481). */
+  /** Energiebelasting + eventuele extra kosten in €/kWh; null als leeg/ongeldig. */
   _ebEnKosten() {
-    const raw =
-      this._config?.eb_en_kosten ??
-      this._config?.btw_en_kosten ??
-      DEFAULTS.eb_en_kosten;
+    const raw = this._config?.eb_en_kosten ?? this._config?.btw_en_kosten;
+    if (raw === "" || raw === null || raw === undefined) return null;
     const n = Number(raw);
-    if (!Number.isFinite(n) || n < 0) return DEFAULTS.eb_en_kosten;
+    if (!Number.isFinite(n) || n < 0) return null;
     return n;
   }
 
-  /** Bedrag dat van de sensorprijs af gaat (0 als incl. EB). */
+  /**
+   * Bedrag dat bij de kale Nordpool-prijs wordt opgeteld.
+   * Alleen als incl. EB aan staat én eb_en_kosten is ingevuld; anders 0.
+   */
   _nordpoolEbAdjustment() {
-    if (this._inclEb()) return 0;
+    if (!this._inclEb()) return 0;
     let fee = this._ebEnKosten();
+    if (fee == null || fee === 0) return 0;
     const entityId = this._nordpoolEntityId();
     const attrs = this._hass?.states?.[entityId]?.attributes || {};
     if (attrs.price_in_cents) fee *= 100;
@@ -564,7 +570,7 @@ class AnkerScheduleCard extends HTMLElement {
   /**
    * Gemiddelde prijs per uur (0–23) uit Nord Pool today/raw_today.
    * Ondersteunt 15-min (96) en uurlijkse (24) series.
-   * Bij incl_eb=false wordt eb_en_kosten van elke uurprijs afgetrokken.
+   * Bij incl_eb=true + ingevulde eb_en_kosten wordt die bij elke uurprijs opgeteld.
    */
   _nordpoolHourlyPrices() {
     const entityId = this._nordpoolEntityId();
@@ -628,7 +634,7 @@ class AnkerScheduleCard extends HTMLElement {
     if (!fee) return rows;
     return rows.map((row) => ({
       ...row,
-      price: row.price - fee,
+      price: row.price + fee,
     }));
   }
 
@@ -751,8 +757,8 @@ class AnkerScheduleCard extends HTMLElement {
 
     const byHour = new Map(prices.map((row) => [row.hour, row.price]));
     const vals = prices.map((row) => row.price);
-    // Absolute schaal t.o.v. 0, zodat aftrekken van eb_en_kosten de kolommen
-    // zichtbaar wijzigt (relatieve min→max blijft bij een vaste aftrek gelijk).
+    // Absolute schaal t.o.v. 0, zodat optellen van eb_en_kosten de kolommen
+    // zichtbaar wijzigt (relatieve min→max blijft bij een vaste toeslag gelijk).
     const dataMin = Math.min(...vals);
     const dataMax = Math.max(...vals);
     const min = Math.min(0, dataMin);
@@ -761,8 +767,9 @@ class AnkerScheduleCard extends HTMLElement {
     const { cheap, expensive } = this._nordpoolRankSets(prices);
     const kleurrijk = this._epexKleurrijk();
     const inclEb = this._inclEb();
+    const ebFee = this._ebEnKosten();
     const nowHour = new Date().getHours();
-    const sig = `${this._nordpoolEntityId()}|${this._aantalUren()}|${kleurrijk}|${inclEb}|${this._ebEnKosten()}|${nowHour}|${prices
+    const sig = `${this._nordpoolEntityId()}|${this._aantalUren()}|${kleurrijk}|${inclEb}|${ebFee}|${nowHour}|${prices
       .map((row) => `${row.hour}:${row.price}`)
       .join(",")}`;
     if (
@@ -778,9 +785,8 @@ class AnkerScheduleCard extends HTMLElement {
 
     if (this._els.nordpoolUnit) {
       const unit = this._nordpoolPriceUnit();
-      this._els.nordpoolUnit.textContent = inclEb
-        ? unit
-        : `${unit} · excl. EB`;
+      this._els.nordpoolUnit.textContent =
+        inclEb && ebFee != null ? `${unit} · incl. EB` : unit;
     }
 
     bars.innerHTML = "";
@@ -1360,7 +1366,7 @@ class AnkerScheduleCard extends HTMLElement {
               <label class="nordpool-hours-label" for="as-np-hours">Aantal uren</label>
               <input id="as-np-hours" class="nordpool-hours-slider" type="range" min="1" max="24" step="1" value="4">
               <span class="nordpool-hours-value">4</span>
-              <label class="nordpool-incl-eb" title="Incl. energiebelasting. Uit: trek eb_en_kosten van de uurprijzen af">
+              <label class="nordpool-incl-eb" title="Incl. energiebelasting. Aan: tel eb_en_kosten bij de kale Nordpool-prijs (alleen als ingevuld)">
                 <input class="nordpool-incl-eb-check" type="checkbox" checked>
                 <span>incl. EB</span>
               </label>
@@ -2781,15 +2787,15 @@ class AnkerScheduleEditor extends HTMLElement {
             Incl. EB / energiebelasting (incl_eb)
           </label>
           <div class="hint">
-            Aan: EPEX-uurprijzen inclusief energiebelasting. Uit: trek eb_en_kosten af. Ook via vinkje “incl. EB” onder de grafiek.
+            Aan: tel eb_en_kosten bij de kale Nordpool-prijs. Uit of leeg veld: kale sensorprijs. Ook via vinkje “incl. EB” onder de grafiek.
           </div>
           <div class="row">
             <label>EB en kosten €/kWh (eb_en_kosten)</label>
-            <input type="number" data-key="eb_en_kosten" min="0" step="0.0000001" placeholder="0.1108481">
+            <input type="number" data-key="eb_en_kosten" min="0" step="0.0000001" placeholder="">
           </div>
           <div class="hint">
-            Energiebelasting per kWh die bij uitgevinkt “incl. EB” van elke uurprijs wordt afgetrokken.
-            Behalve energiebelasting kun je hier ook extra kosten per kWh opvoeren. Standaard 0.1108481.
+            Optioneel. Alleen bij aangevinkt “incl. EB” wordt deze waarde bij elke kale uurprijs opgeteld.
+            Leeg = geen toeslag. Behalve energiebelasting kun je hier ook extra kosten per kWh opvoeren.
           </div>
 
           <div class="hint">
@@ -2882,7 +2888,6 @@ class AnkerScheduleEditor extends HTMLElement {
         default_discharge_soc: 10,
         transparantie: 15,
         aantal_uren: 4,
-        eb_en_kosten: 0.1108481,
       };
       Object.keys(numberKeys).forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
@@ -2919,6 +2924,32 @@ class AnkerScheduleEditor extends HTMLElement {
           this._updateConfig({ [key]: next });
         });
       });
+
+      const ebInput = this.querySelector('input[data-key="eb_en_kosten"]');
+      if (ebInput) {
+        ebInput.addEventListener("input", () => {
+          if (ebInput.value === "") {
+            this._updateConfig({ eb_en_kosten: null });
+            return;
+          }
+          const val = parseFloat(ebInput.value);
+          if (!Number.isFinite(val) || val < 0) return;
+          this._updateConfig({ eb_en_kosten: val });
+        });
+        ebInput.addEventListener("change", () => {
+          if (ebInput.value === "") {
+            this._updateConfig({ eb_en_kosten: null });
+            return;
+          }
+          const val = parseFloat(ebInput.value);
+          if (!Number.isFinite(val) || val < 0) {
+            this._updateConfig({ eb_en_kosten: null });
+            ebInput.value = "";
+            return;
+          }
+          this._updateConfig({ eb_en_kosten: val });
+        });
+      }
 
       ["enabled", "auto_apply", "show_soc", "dynamische_energieprijzen", "epex_kleurrijk", "incl_eb"].forEach((key) => {
         const input = this.querySelector(`input[data-key="${key}"]`);
@@ -3017,12 +3048,14 @@ class AnkerScheduleEditor extends HTMLElement {
           )
         );
       } else if (key === "eb_en_kosten") {
-        const n = Number(
-          this._config.eb_en_kosten ??
-            this._config.btw_en_kosten ??
-            DEFAULTS.eb_en_kosten
-        );
-        val = Number.isFinite(n) && n >= 0 ? n : DEFAULTS.eb_en_kosten;
+        const raw =
+          this._config.eb_en_kosten ?? this._config.btw_en_kosten;
+        if (raw === "" || raw === null || raw === undefined) {
+          val = "";
+        } else {
+          const n = Number(raw);
+          val = Number.isFinite(n) && n >= 0 ? n : "";
+        }
       }
       if (input.value !== String(val)) input.value = val;
     });
@@ -3068,12 +3101,18 @@ class AnkerScheduleEditor extends HTMLElement {
       if (ENTITY_CONFIG_KEYS.includes(key)) return;
       if (key === "colors") {
         raw.colors = { ...(raw.colors || {}), ...patch.colors };
+      } else if (key === "eb_en_kosten") {
+        if (patch[key] === null || patch[key] === "" || patch[key] === undefined) {
+          delete raw.eb_en_kosten;
+        } else {
+          raw.eb_en_kosten = patch[key];
+        }
       } else {
         raw[key] = patch[key];
       }
     });
     // Oude BTW-keys opruimen na hernoeming naar EB
-    if ("incl_eb" in raw || "eb_en_kosten" in raw) {
+    if ("incl_eb" in raw || "eb_en_kosten" in raw || "eb_en_kosten" in patch) {
       delete raw.incl_btw;
       delete raw.btw_en_kosten;
     }
@@ -3083,6 +3122,7 @@ class AnkerScheduleEditor extends HTMLElement {
       ...raw,
       colors: { ...DEFAULTS.colors, ...(raw.colors || {}) },
     };
+    if (!("eb_en_kosten" in raw)) delete this._config.eb_en_kosten;
     ENTITY_CONFIG_KEYS.forEach((key) => {
       delete this._config[key];
     });
