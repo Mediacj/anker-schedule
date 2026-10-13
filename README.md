@@ -36,6 +36,12 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
 
 ## Randvoorwaarden EPEX tarieven
 - installeer <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> in HACS
+Bij het installeren van de Nord Pool integratie kun je het beste deze waarden ingeven:
+<p align="center">
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/67927526-eb93-4898-82b8-feaa768fd882" />
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/95fc63ab-0372-49c8-96e9-65a45e2dc299" />
+</p>
+
 - geef de entiteit van Nord Pool op tijdens de configuratie van de planner
 
 ## Schermvoorbeelden
@@ -45,9 +51,9 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
   <img width="340" alt="schermvoorbeeld met selectie" src="https://github.com/user-attachments/assets/10d8be96-4f22-48ad-a339-68b81d508fe9" />
 </p>
 
-## Installeren
+## Installeren Energienerds.nl Scheduler
 
-#Vergeet niet om eerst de <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a> te installeren, als je die nog niet hebt. En  <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> als je met dynamische tarieven wilt werken.
+#Vergeet niet om eerst de <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a> te installeren, als je die nog niet hebt. En <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> als je met dynamische tarieven wilt werken.
 
 ### Snelste manier (HACS)
 
