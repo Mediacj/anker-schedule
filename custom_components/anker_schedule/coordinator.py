@@ -46,6 +46,7 @@ from .const import (
     DEFAULT_MODE_SETTLE_SECONDS,
     DEFAULT_THIRD_PARTY_OPTION,
     DOMAIN,
+    MIN_SOC_MAX,
     MODE_CHARGE,
     MODE_DISCHARGE,
     MODE_NOM,
@@ -54,6 +55,7 @@ from .const import (
 )
 from .schedule import (
     clamp_soc,
+    clamp_soc_max,
     empty_compact,
     normalize_schedule,
     parse_compact,
@@ -108,7 +110,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def default_charge_soc(self) -> int:
-        return clamp_soc(
+        return clamp_soc_max(
             self._cfg(CONF_DEFAULT_CHARGE_SOC, DEFAULT_CHARGE_SOC),
             DEFAULT_CHARGE_SOC,
         )
@@ -441,10 +443,15 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             blocking=True,
         )
 
-    async def _async_set_number(self, entity_id: str, value: int) -> None:
+    async def _async_set_number(
+        self, entity_id: str, value: int, *, is_soc_max: bool = False
+    ) -> None:
         """Set a plain number entity (SOC-limiet); geen vermogenssnapping."""
         if not entity_id:
             return
+        target = int(value)
+        if is_soc_max:
+            target = max(MIN_SOC_MAX, min(100, target))
         state = self.hass.states.get(entity_id)
         if state is None:
             return
@@ -452,12 +459,12 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             current = float(state.state)
         except (TypeError, ValueError):
             current = None
-        if current is not None and round(current) == int(value):
+        if current is not None and round(current) == target:
             return
         await self.hass.services.async_call(
             "number",
             "set_value",
-            {"entity_id": entity_id, "value": int(value)},
+            {"entity_id": entity_id, "value": target},
             blocking=True,
         )
 
@@ -719,7 +726,9 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ):
             try:
                 if mode == MODE_NOM:
-                    await self._async_set_number(charge_soc_entity, soc_max)
+                    await self._async_set_number(
+                        charge_soc_entity, soc_max, is_soc_max=True
+                    )
                     await self._async_set_number(discharge_soc_entity, soc_min)
                 elif mode in (MODE_CHARGE, MODE_DISCHARGE):
                     await self._async_set_power(power_entity, power)
@@ -728,6 +737,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         if mode == MODE_CHARGE
                         else discharge_soc_entity,
                         soc_max if mode == MODE_CHARGE else soc_min,
+                        is_soc_max=mode == MODE_CHARGE,
                     )
                 self._last_applied_key = key
                 _LOGGER.debug(
@@ -750,7 +760,9 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # NOM: mode klopt al — eventueel alleen SOC bijwerken zonder mode-select.
             if mode == MODE_NOM:
                 try:
-                    await self._async_set_number(charge_soc_entity, soc_max)
+                    await self._async_set_number(
+                        charge_soc_entity, soc_max, is_soc_max=True
+                    )
                     await self._async_set_number(discharge_soc_entity, soc_min)
                 except Exception:  # noqa: BLE001
                     _LOGGER.debug("Anker SOC-bijwerken mislukt", exc_info=True)
@@ -806,7 +818,9 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     mode_entity,
                     str(self._cfg(CONF_NOM_OPTION, DEFAULT_NOM_OPTION)),
                 )
-                await self._async_set_number(charge_soc_entity, soc_max)
+                await self._async_set_number(
+                    charge_soc_entity, soc_max, is_soc_max=True
+                )
                 await self._async_set_number(discharge_soc_entity, soc_min)
                 # Alleen na moduswisseling nabchecken — niet bij elke SOC-tick.
                 if transition or force:
@@ -857,6 +871,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self._async_set_number(
                     charge_soc_entity if mode == MODE_CHARGE else discharge_soc_entity,
                     soc_max if mode == MODE_CHARGE else soc_min,
+                    is_soc_max=mode == MODE_CHARGE,
                 )
             self._last_applied_key = key
             self._last_mode_key = mode

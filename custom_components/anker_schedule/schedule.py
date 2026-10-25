@@ -9,6 +9,7 @@ from .const import (
     DEFAULT_CHARGE_SOC,
     DEFAULT_DEFAULT_POWER,
     DEFAULT_DISCHARGE_SOC,
+    MIN_SOC_MAX,
     MODE_CHARGE,
     MODE_DISCHARGE,
     MODE_NOM,
@@ -24,6 +25,11 @@ def clamp_soc(value: Any, fallback: int = 0) -> int:
     except (TypeError, ValueError):
         soc = int(fallback)
     return max(0, min(100, soc))
+
+
+def clamp_soc_max(value: Any, fallback: int = DEFAULT_CHARGE_SOC) -> int:
+    """Max SOC (laden/NOM): 80–100 (harde batterijgrens)."""
+    return max(MIN_SOC_MAX, clamp_soc(value, fallback))
 
 
 def default_soc_for_mode(
@@ -65,6 +71,9 @@ def slot_socs(
     else:
         soc_max = max_fallback
 
+    if mode in (MODE_CHARGE, MODE_NOM):
+        soc_max = clamp_soc_max(soc_max, max_fallback or DEFAULT_CHARGE_SOC)
+
     if "soc_min" in slot:
         soc_min = clamp_soc(slot.get("soc_min"), min_fallback)
     elif mode == MODE_DISCHARGE and "soc" in slot:
@@ -103,24 +112,31 @@ def decode_soc_token(
 
     if "/" in text:
         left, right = text.split("/", 1)
+        soc_max = clamp_soc(left, max_fallback)
+        if mode in (MODE_CHARGE, MODE_NOM):
+            soc_max = clamp_soc_max(soc_max, max_fallback or DEFAULT_CHARGE_SOC)
         return (
-            clamp_soc(left, max_fallback),
+            soc_max,
             clamp_soc(right, min_fallback),
         )
 
     if text == "":
+        if mode in (MODE_CHARGE, MODE_NOM):
+            max_fallback = clamp_soc_max(
+                max_fallback, max_fallback or DEFAULT_CHARGE_SOC
+            )
         return max_fallback, min_fallback
 
     single = clamp_soc(text, default_soc_for_mode(
         mode, charge_soc=charge_soc, discharge_soc=discharge_soc
     ))
     if mode == MODE_CHARGE:
-        return single, min_fallback
+        return clamp_soc_max(single, max_fallback or DEFAULT_CHARGE_SOC), min_fallback
     if mode == MODE_DISCHARGE:
         return max_fallback, single
     if mode == MODE_NOM:
         # Legacy single value on NOM: treat as max, keep default min.
-        return single, min_fallback
+        return clamp_soc_max(single, max_fallback or DEFAULT_CHARGE_SOC), min_fallback
     return 0, 0
 
 

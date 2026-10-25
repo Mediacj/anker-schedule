@@ -834,9 +834,14 @@ class AnkerScheduleCard extends HTMLElement {
     return this._configuredPower("default_power", 500);
   }
 
+  /** Harde batterijgrens: max SOC mag niet onder 80%. */
+  _minSocMax() {
+    return 80;
+  }
+
   _defaultChargeSoc() {
     return Math.max(
-      0,
+      this._minSocMax(),
       Math.min(100, this._configuredPower("default_charge_soc", 100))
     );
   }
@@ -860,6 +865,12 @@ class AnkerScheduleCard extends HTMLElement {
     return Math.max(0, Math.min(100, Math.round(n)));
   }
 
+  /** Max SOC (laden/NOM): vloer 80%. */
+  _clampSocMax(value, fallback = 100) {
+    const fb = Math.max(this._minSocMax(), this._clampSoc(fallback, 100));
+    return Math.max(this._minSocMax(), this._clampSoc(value, fb));
+  }
+
   _showSoc() {
     return !!this._config?.show_soc;
   }
@@ -874,6 +885,9 @@ class AnkerScheduleCard extends HTMLElement {
         : mode === "charge" || mode === "nom"
           ? this._clampSoc(slot?.soc, maxFb)
           : maxFb;
+    if (mode === "charge" || mode === "nom") {
+      socMax = this._clampSocMax(socMax, maxFb || 100);
+    }
     let socMin =
       slot?.soc_min !== undefined && slot?.soc_min !== null
         ? this._clampSoc(slot.soc_min, minFb)
@@ -900,16 +914,24 @@ class AnkerScheduleCard extends HTMLElement {
     const text = String(token || "").trim();
     if (text.includes("/")) {
       const [left, right] = text.split("/", 2);
+      let socMax = this._clampSoc(left, maxFb);
+      if (mode === "charge" || mode === "nom") {
+        socMax = this._clampSocMax(socMax, maxFb || 100);
+      }
       return {
-        socMax: this._clampSoc(left, maxFb),
+        socMax,
         socMin: this._clampSoc(right, minFb),
       };
     }
     if (text === "") return { socMax: maxFb, socMin: minFb };
     const single = this._clampSoc(text, this._defaultSocForMode(mode));
-    if (mode === "charge") return { socMax: single, socMin: minFb };
+    if (mode === "charge") {
+      return { socMax: this._clampSocMax(single, maxFb || 100), socMin: minFb };
+    }
     if (mode === "discharge") return { socMax: maxFb, socMin: single };
-    if (mode === "nom") return { socMax: single, socMin: minFb };
+    if (mode === "nom") {
+      return { socMax: this._clampSocMax(single, maxFb || 100), socMin: minFb };
+    }
     return { socMax: 0, socMin: 0 };
   }
 
@@ -1374,7 +1396,7 @@ class AnkerScheduleCard extends HTMLElement {
                 <span class="soc-label">SOC</span>
                 <span class="soc-value">100 %</span>
               </div>
-              <input class="soc-slider" type="range" min="0" max="100" step="1" value="100">
+              <input class="soc-slider" type="range" min="80" max="100" step="1" value="100">
             </div>
             <div class="soc-wrap soc-min-wrap hidden">
               <div class="power-labels">
@@ -1517,7 +1539,7 @@ class AnkerScheduleCard extends HTMLElement {
 
     this._els.socSlider.addEventListener("input", () => {
       if (!this._hasSelection()) return;
-      const soc = this._clampSoc(
+      const soc = this._clampSocMax(
         this._els.socSlider.value,
         this._defaultChargeSoc()
       );
@@ -1785,12 +1807,15 @@ class AnkerScheduleCard extends HTMLElement {
     this._els.socMinWrap?.classList.toggle("hidden", !showMin);
 
     if (showMax) {
+      const maxSoc = this._clampSocMax(socMax, this._defaultChargeSoc());
       for (const h of hours) {
-        this._schedule[h].soc_max = socMax;
-        if (this._schedule[h].mode !== "discharge") this._schedule[h].soc = socMax;
+        this._schedule[h].soc_max = maxSoc;
+        if (this._schedule[h].mode !== "discharge") this._schedule[h].soc = maxSoc;
       }
-      this._els.socSlider.value = String(socMax);
-      this._els.socValue.textContent = `${socMax} %`;
+      this._els.socSlider.min = String(this._minSocMax());
+      this._els.socSlider.max = "100";
+      this._els.socSlider.value = String(maxSoc);
+      this._els.socValue.textContent = `${maxSoc} %`;
       this._els.socLabel.textContent = "Max SOC";
       this._els.socSlider.style.accentColor = isNom
         ? this._config.colors.nom
@@ -2871,7 +2896,7 @@ class AnkerScheduleEditor extends HTMLElement {
           <div class="row"><label>Stap (power_step)</label><input type="number" data-key="power_step" min="1" step="1"></div>
 
           <div class="section-title">SOC</div>
-          <div class="row"><label>Standaard max SOC laden (default_charge_soc)</label><input type="number" data-key="default_charge_soc" min="0" max="100" step="1"></div>
+          <div class="row"><label>Standaard max SOC laden (default_charge_soc, min 80)</label><input type="number" data-key="default_charge_soc" min="80" max="100" step="1"></div>
           <div class="row"><label>Standaard min SOC ontladen (default_discharge_soc)</label><input type="number" data-key="default_discharge_soc" min="0" max="100" step="1"></div>
 
           <div class="section-title">Kleuren</div>
@@ -2958,9 +2983,10 @@ class AnkerScheduleEditor extends HTMLElement {
           const val = parseFloat(input.value);
           if (!Number.isFinite(val) || val < 0) return;
           let clamped = val;
-          if (
+          if (key === "default_charge_soc") {
+            clamped = Math.max(80, Math.min(100, val));
+          } else if (
             key === "transparantie" ||
-            key === "default_charge_soc" ||
             key === "default_discharge_soc"
           ) {
             clamped = Math.max(0, Math.min(100, val));
@@ -2973,9 +2999,10 @@ class AnkerScheduleEditor extends HTMLElement {
           const val = parseFloat(input.value);
           let next =
             Number.isFinite(val) && val >= 0 ? val : numberKeys[key];
-          if (
+          if (key === "default_charge_soc") {
+            next = Math.max(80, Math.min(100, next));
+          } else if (
             key === "transparantie" ||
-            key === "default_charge_soc" ||
             key === "default_discharge_soc"
           ) {
             next = Math.max(0, Math.min(100, next));
@@ -3106,6 +3133,16 @@ class AnkerScheduleEditor extends HTMLElement {
           Math.min(
             24,
             Math.round(Number(this._config.aantal_uren ?? DEFAULTS.aantal_uren))
+          )
+        );
+      } else if (key === "default_charge_soc") {
+        val = Math.max(
+          80,
+          Math.min(
+            100,
+            Math.round(
+              Number(this._config.default_charge_soc ?? DEFAULTS.default_charge_soc)
+            )
           )
         );
       } else if (key === "eb_en_kosten") {
