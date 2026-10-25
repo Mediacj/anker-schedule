@@ -139,7 +139,7 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Optional(
                 CONF_DEFAULT_CHARGE_SOC,
                 default=d.get(CONF_DEFAULT_CHARGE_SOC, DEFAULT_CHARGE_SOC),
-            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+            ): vol.All(vol.Coerce(int), vol.Range(min=80, max=100)),
             vol.Optional(
                 CONF_DEFAULT_DISCHARGE_SOC,
                 default=d.get(
