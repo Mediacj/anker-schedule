@@ -3,7 +3,7 @@
  * Extra module URL: /local/anker-schedule/anker-schedule.js
  */
 
-const CARD_VERSION = "1.0.38";
+const CARD_VERSION = "1.0.39";
 const LOGO_URL = `/local/anker-schedule/energienerds-logo.png?v=${CARD_VERSION}`;
 const BRAND_URL = "https://energienerds.nl";
 const STORAGE_PREFIX = "anker-schedule-integration:v1:";
@@ -1225,12 +1225,63 @@ class AnkerScheduleCard extends HTMLElement {
     };
   }
 
+  /** Max van de Anker number-entity (attributen max / max_value / native_max_value). */
+  _powerEntityMax() {
+    const entityId = this._powerEntity();
+    const st = this._hass?.states?.[entityId];
+    if (!st) return null;
+    const attrs = st.attributes || {};
+    const raw = attrs.max ?? attrs.max_value ?? attrs.native_max_value;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+
   _snapPower(watts) {
     const { min, max, step } = this._powerLimits();
     const raw = Number(watts);
     if (!Number.isFinite(raw)) return min;
     const snapped = Math.round(raw / step) * step;
     return Math.min(max, Math.max(min, snapped));
+  }
+
+  /**
+   * Bij laden: als gevraagde W > entity-max → melding + clamp naar entity-max.
+   */
+  _clampChargePowerToEntity(power, { notify = true } = {}) {
+    const wanted = this._snapPower(power);
+    const entityMax = this._powerEntityMax();
+    if (entityMax == null || wanted <= entityMax) return wanted;
+    const { min, step } = this._powerLimits();
+    let capped = Math.floor(entityMax / step) * step;
+    capped = Math.max(min, Math.min(wanted, capped));
+    if (notify) this._notifyChargePowerAboveEntityMax(wanted, entityMax, capped);
+    return capped;
+  }
+
+  _notifyChargePowerAboveEntityMax(wanted, entityMax, capped) {
+    const key = `${wanted}:${entityMax}:${capped}`;
+    if (this._lastPowerCapNotice === key) return;
+    this._lastPowerCapNotice = key;
+    const maxTxt = Number.isInteger(entityMax)
+      ? String(entityMax)
+      : String(Math.round(entityMax * 10) / 10);
+    const msg = `Laden ${Math.round(wanted)} W is hoger dan het maximum van de Anker vermogensentity (${maxTxt} W). Aangepast naar ${Math.round(capped)} W.`;
+    this.dispatchEvent(
+      new CustomEvent("hass-notification", {
+        detail: { message: msg },
+        bubbles: true,
+        composed: true,
+      })
+    );
+    try {
+      this._hass?.callService("persistent_notification", "create", {
+        title: "Anker Schedule",
+        message: msg,
+        notification_id: "anker_schedule_charge_power_limit",
+      });
+    } catch (_e) {
+      /* ignore */
+    }
   }
 
   _syncPowerLimits() {
@@ -1451,7 +1502,10 @@ class AnkerScheduleCard extends HTMLElement {
 
     this._els.powerSlider.addEventListener("input", () => {
       if (!this._hasSelection()) return;
-      const power = this._snapPower(this._els.powerSlider.value);
+      let power = this._snapPower(this._els.powerSlider.value);
+      if (this._selectionMode() === "charge") {
+        power = this._clampChargePowerToEntity(power, { notify: true });
+      }
       this._els.powerSlider.value = String(power);
       this._els.powerValue.textContent = `${Math.round(power)} W`;
       for (const h of this._selectedHours) {
@@ -1661,9 +1715,13 @@ class AnkerScheduleCard extends HTMLElement {
     } else if (mode === "discharge") {
       socMin = this._defaultDischargeSoc();
     }
+    let power = this._defaultPower();
+    if (mode === "charge") {
+      power = this._clampChargePowerToEntity(power, { notify: true });
+    }
     this._schedule[hour] = {
       mode,
-      power: this._defaultPower(),
+      power,
       soc: mode === "discharge" ? socMin : socMax,
       soc_max: socMax,
       soc_min: socMin,
@@ -1713,7 +1771,10 @@ class AnkerScheduleCard extends HTMLElement {
     this._els.powerWrap.classList.toggle("hidden", !needsPower);
     if (needsPower) {
       this._syncPowerLimits();
-      const power = this._snapPower(slot.power);
+      let power = this._snapPower(slot.power);
+      if (mode === "charge") {
+        power = this._clampChargePowerToEntity(power, { notify: true });
+      }
       for (const h of hours) this._schedule[h].power = power;
       this._els.powerSlider.value = String(power);
       this._els.powerValue.textContent = `${Math.round(power)} W`;

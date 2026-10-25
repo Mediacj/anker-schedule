@@ -360,10 +360,72 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             blocking=True,
         )
 
-    async def _async_set_power(self, entity_id: str, watts: int) -> None:
+    def _entity_number_max(self, entity_id: str) -> float | None:
+        """Lees max-attribuut van een number-entity (Anker vermogenslimiet)."""
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return None
+        attrs = state.attributes or {}
+        for key in ("max", "max_value", "native_max_value"):
+            raw = attrs.get(key)
+            if raw is None:
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if value >= 0:
+                return value
+        return None
+
+    async def _async_notify_charge_power_capped(
+        self, *, wanted: int, capped: int, entity_max: float
+    ) -> None:
+        max_txt = (
+            str(int(entity_max))
+            if float(entity_max).is_integer()
+            else str(round(entity_max, 1))
+        )
+        message = (
+            f"Laden {wanted} W is hoger dan het maximum van de Anker "
+            f"vermogensentity ({max_txt} W). Toegepast: {capped} W."
+        )
+        _LOGGER.warning("Anker Schedule: %s", message)
+        try:
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "Anker Schedule",
+                    "message": message,
+                    "notification_id": "anker_schedule_charge_power_limit",
+                },
+                blocking=False,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug(
+                "Anker Schedule: persistent_notification mislukt", exc_info=True
+            )
+
+    async def _async_set_power(
+        self, entity_id: str, watts: int, *, for_charge: bool = False
+    ) -> None:
         if not entity_id:
             return
         value = self.snap_power(abs(watts))
+        if for_charge:
+            entity_max = self._entity_number_max(entity_id)
+            if entity_max is not None and value > entity_max:
+                wanted = value
+                step = self.power_step
+                capped = int(entity_max // step) * step if step > 0 else int(entity_max)
+                capped = max(self.min_power, min(value, capped))
+                await self._async_notify_charge_power_capped(
+                    wanted=wanted, capped=capped, entity_max=entity_max
+                )
+                value = capped
         state = self.hass.states.get(entity_id)
         if state is not None:
             try:
@@ -431,7 +493,7 @@ class AnkerScheduleCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             direction,
             str(self._cfg(CONF_CHARGE_OPTION, DEFAULT_CHARGE_OPTION)),
         )
-        await self._async_set_power(power_entity, power)
+        await self._async_set_power(power_entity, power, for_charge=True)
         return True
 
     async def _async_set_nom_switch(self, on: bool) -> None:
