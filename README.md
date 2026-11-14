@@ -152,7 +152,8 @@ Je kunt de planner eenvoudig toevoegen door je dashboard te bewerken en te zoeke
 
 Als je daarna het dashboard bewerkt en op het pennetje van de net geplaatste kaart klikt kun je alle variabelen van de kaart aan en uitzetten etc.
 
-
+Als je HA net geïnstalleerd hebt, moet je eerst een eigen dashboard aanmaken voordat je kaarten kunt plaatsen.
+Ga daarvoor naar Instellingen, Dashboards en kies daar voor ‘Voeg dashboard toe’. Ga vervolgens naar dat nieuwe dashboard, klik rechtsboven op het pennetje en voeg de schedulerkaart toe. Kun je de scheduler daar niet vinden, ververs dan de browser of verwijder de cachebestanden van de browser.
 
 Of als je flexibel wilt zijn kun je ook met yaml werken, minimaal is onderstaande yaml genoeg:
 
