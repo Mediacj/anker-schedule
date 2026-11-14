@@ -35,7 +35,7 @@ Zie ook het artikel op <a href="https://energienerds.nl/index.php/2026/08/15/hom
 **Let op:** EPEX tarieven is een optionele toevoeging die je in de configuratie van het dashboard aan of uit kunt zetten. Als je er gebruik van maakt moet je onderstaande randvoorwaarden ook uitvoeren:
 
 ## Randvoorwaarden EPEX tarieven
-- installeer <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> in HACS
+- installeer <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> in de HA Marktplaats
 Bij het installeren van de Nord Pool integratie kun je het beste deze waarden ingeven:
 <p align="center">
 <img width="400" alt="image" src="https://github.com/user-attachments/assets/67927526-eb93-4898-82b8-feaa768fd882" />
@@ -55,17 +55,17 @@ Bij het installeren van de Nord Pool integratie kun je het beste deze waarden in
 
 #Vergeet niet om eerst de <a href="https://github.com/anker-charging/ha-anker-solix-official" target="_blank" rel="noopener">Anker Official Integration</a> te installeren, als je die nog niet hebt. En <a href="https://github.com/custom-components/nordpool#installation" target="_blank">deze Nord Pool integratie</a> als je met dynamische tarieven wilt werken.
 
-### Snelste manier (HACS)
+### Snelste manier (HA Marktplaats)
 
 <p align="center">
   <a href="https://my.home-assistant.io/redirect/hacs_repository/?repository=anker-schedule&category=integration&owner=Mediacj" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="Open your Home Assistant instance and open a repository inside the Home Assistant Community Store." /></a>
 </p>
 
-Klik op de knop hierboven om de repository direct in HACS te openen (Home Assistant moet bereikbaar zijn vanaf dit apparaat). Ga na het downloaden verder naar stap 2 hieronder.
+Klik op de knop hierboven om de repository direct in de HA Marktplaats te openen (Home Assistant moet bereikbaar zijn vanaf dit apparaat). Ga na het downloaden verder naar stap 2 hieronder.
 
-### Handmatig / via HACS-custom repository
+### Handmatig / via Marktplaats-custom repository
 
-1. Installeer via HACS (custom repository) of kopieer `custom_components/anker_schedule` naar je Home Assistant `custom_components`-map.
+1. Installeer via Marktplaats (custom repository) of kopieer `custom_components/anker_schedule` naar je Home Assistant `custom_components`-map.
 2. Herstart Home Assistant.
 3. Ga naar **Instellingen → Apparaten en diensten → Integratie toevoegen** en zoek **Anker SOLIX Schedule**.
 4. Kies zelf je entities (velden starten leeg):
